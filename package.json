@@ -8,8 +8,11 @@
     "dev": "npm run build && electron .",
     "dev:web": "vite",
     "build": "vite build",
+    "build:web": "vite build",
     "electron": "electron .",
     "start": "npm run build && electron .",
+    "start:web": "vite",
+    "package": "npm run build && npx electron-packager . youtube-manager --platform=win32 --arch=x64 --out=dist-packager --overwrite",
     "build:electron": "npm run build && electron-builder",
     "build:win": "npm run build && electron-builder --win",
     "dist": "npm run build && electron-builder --win --publish=never",
@@ -32,6 +35,7 @@
     "concurrently": "^8.2.2",
     "electron": "^28.1.0",
     "electron-builder": "^24.9.1",
+    "electron-packager": "^17.1.2",
     "eslint": "^8.55.0",
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
@@ -78,27 +82,12 @@
       "package.json"
     ],
     "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "msi",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "assets/icon.ico"
+      "target": "portable",
+      "sign": false,
+      "verifyUpdateCodeSignature": false
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+    "portable": {
+      "artifactName": "YouTube-Manager-Portable.exe"
     }
   }
 }

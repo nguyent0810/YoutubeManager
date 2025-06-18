@@ -1,8 +1,14 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const keytar = require('keytar');
+const Store = require('electron-store');
 const fetch = require('node-fetch');
+
+// Initialize secure store
+const secureStore = new Store({
+  name: 'secure-credentials',
+  encryptionKey: 'youtube-manager-secure-key'
+});
 const isDev = !app.isPackaged;
 
 // Keep a global reference of the window object
@@ -161,7 +167,7 @@ ipcMain.handle('open-external', async (event, url) => {
 // Secure storage handlers
 ipcMain.handle('secure-store-get', async (event, key) => {
   try {
-    return await keytar.getPassword('youtube-channel-manager', key);
+    return secureStore.get(key, null);
   } catch (error) {
     console.error('Failed to get from secure store:', error);
     return null;
@@ -170,7 +176,7 @@ ipcMain.handle('secure-store-get', async (event, key) => {
 
 ipcMain.handle('secure-store-set', async (event, key, value) => {
   try {
-    await keytar.setPassword('youtube-channel-manager', key, value);
+    secureStore.set(key, value);
     return true;
   } catch (error) {
     console.error('Failed to set in secure store:', error);
@@ -234,7 +240,7 @@ ipcMain.handle('read-file', async (event, filePath) => {
 
 ipcMain.handle('secure-store-delete', async (event, key) => {
   try {
-    await keytar.deletePassword('youtube-channel-manager', key);
+    secureStore.delete(key);
     return true;
   } catch (error) {
     console.error('Failed to delete from secure store:', error);
