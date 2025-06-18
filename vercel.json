@@ -7,10 +7,5 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "env": {
-    "VITE_YOUTUBE_CLIENT_ID": "@youtube_client_id",
-    "VITE_YOUTUBE_CLIENT_SECRET": "@youtube_client_secret",
-    "VITE_YOUTUBE_REDIRECT_URI": "@youtube_redirect_uri"
-  }
+  ]
 }
