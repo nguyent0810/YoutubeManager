@@ -28,7 +28,7 @@ function createWindow() {
       enableRemoteModule: false,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, 'assets/icon.png'),
+    icon: path.join(__dirname, 'assets/youtube-manager-icon.ico'),
     show: false,
     titleBarStyle: 'hiddenInset',
     titleBarOverlay: {
@@ -46,6 +46,7 @@ function createWindow() {
   // Show window when ready to prevent visual flash
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    mainWindow.maximize(); // Maximize by default
   });
 
   // Handle window closed

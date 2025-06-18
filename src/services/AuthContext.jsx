@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { youtubeAuth } from './youtube-api'
+import { masterPasswordService } from './master-password-service'
+import MasterPasswordModal from '../components/MasterPasswordModal'
 
 // Expose youtubeAuth to window for debugging
 if (typeof window !== 'undefined') {
@@ -20,10 +22,51 @@ export function AuthProvider({ children }) {
   const [accounts, setAccounts] = useState([])
   const [activeAccount, setActiveAccount] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showMasterPassword, setShowMasterPassword] = useState(false)
+  const [masterPasswordChecked, setMasterPasswordChecked] = useState(false)
 
   useEffect(() => {
-    loadAccounts()
+    checkMasterPassword()
   }, [])
+
+  const checkMasterPassword = async () => {
+    try {
+      await masterPasswordService.loadMasterPassword()
+      const hasExistingData = await youtubeAuth.hasExistingData()
+
+      if (hasExistingData && masterPasswordService.hasMasterPassword()) {
+        // Has data and master password - require authentication
+        setShowMasterPassword(true)
+      } else if (hasExistingData && !masterPasswordService.hasMasterPassword()) {
+        // Has data but no master password - offer to set one
+        setShowMasterPassword(true)
+      } else {
+        // No existing data - proceed normally
+        setMasterPasswordChecked(true)
+        loadAccounts()
+      }
+    } catch (error) {
+      console.error('Error checking master password:', error)
+      setMasterPasswordChecked(true)
+      loadAccounts()
+    }
+  }
+
+  const handleMasterPasswordAuthenticated = () => {
+    setShowMasterPassword(false)
+    setMasterPasswordChecked(true)
+    loadAccounts()
+  }
+
+  const handleMasterPasswordSkipped = () => {
+    setShowMasterPassword(false)
+    setMasterPasswordChecked(true)
+    // Clear existing data and start fresh
+    youtubeAuth.clearAllData()
+    setAccounts([])
+    setActiveAccount(null)
+    setLoading(false)
+  }
 
   const loadAccounts = async () => {
     try {
@@ -132,12 +175,19 @@ export function AuthProvider({ children }) {
     removeAccount,
     switchAccount,
     refreshActiveAccount,
-    loadAccounts
+    loadAccounts,
+    showMasterPassword,
+    masterPasswordChecked
   }
 
   return (
     <AuthContext.Provider value={value}>
       {children}
+      <MasterPasswordModal
+        isOpen={showMasterPassword}
+        onAuthenticated={handleMasterPasswordAuthenticated}
+        onSkip={handleMasterPasswordSkipped}
+      />
     </AuthContext.Provider>
   )
 }

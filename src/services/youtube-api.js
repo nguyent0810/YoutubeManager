@@ -16,6 +16,49 @@ class YouTubeAPI {
     ]
   }
 
+  // Check if there's existing data
+  async hasExistingData() {
+    try {
+      // Check secure store
+      if (window.electronAPI && window.electronAPI.secureStore) {
+        const secureData = await window.electronAPI.secureStore.get('youtube_accounts')
+        if (secureData) {
+          const accounts = JSON.parse(secureData)
+          if (accounts && accounts.length > 0) return true
+        }
+      }
+
+      // Check localStorage
+      const localData = localStorage.getItem('youtube_accounts')
+      if (localData) {
+        const accounts = JSON.parse(localData)
+        if (accounts && accounts.length > 0) return true
+      }
+
+      return false
+    } catch (error) {
+      console.error('Error checking existing data:', error)
+      return false
+    }
+  }
+
+  // Clear all data
+  async clearAllData() {
+    try {
+      // Clear secure store
+      if (window.electronAPI && window.electronAPI.secureStore) {
+        await window.electronAPI.secureStore.delete('youtube_accounts')
+      }
+
+      // Clear localStorage
+      localStorage.removeItem('youtube_accounts')
+
+      console.log('All data cleared')
+    } catch (error) {
+      console.error('Error clearing data:', error)
+    }
+  }
+
   // Load all saved accounts from secure storage
   async loadAccounts() {
     try {
