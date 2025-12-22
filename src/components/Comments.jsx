@@ -48,7 +48,6 @@ import CommentInsights from './Comments/CommentInsights'
 import ResponseTimeTracker from './Comments/ResponseTimeTracker'
 import ModerationTools from './Comments/ModerationTools'
 import CommentTemplates from './Comments/CommentTemplates'
-import KeyboardShortcuts from './Comments/KeyboardShortcuts'
 
 const Comments = () => {
   const { activeAccount } = useAuth()
@@ -75,7 +74,6 @@ const Comments = () => {
   const [diagnosticResults, setDiagnosticResults] = useState(null)
   const [runningDiagnostic, setRunningDiagnostic] = useState(false)
   const [activeTab, setActiveTab] = useState('comments') // comments, analytics, insights, response-time, moderation, templates
-  const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] = useState(true)
   const [focusedCommentIndex, setFocusedCommentIndex] = useState(0)
   const [commentStats, setCommentStats] = useState({
     total: 0,
@@ -1651,40 +1649,7 @@ const Comments = () => {
         />
       )}
 
-      {/* Keyboard Shortcuts (always active) */}
-      <KeyboardShortcuts
-        isEnabled={keyboardShortcutsEnabled}
-        selectedComments={selectedComments}
-        focusedComment={focusedCommentIndex}
-        onShortcutAction={(action, data) => {
-          console.log('Keyboard shortcut:', action, data)
-          // Handle keyboard shortcuts here
-          switch (action) {
-            case 'navigate-up':
-              setFocusedCommentIndex(prev => Math.max(0, prev - 1))
-              break
-            case 'navigate-down':
-              setFocusedCommentIndex(prev => Math.min(filteredComments.length - 1, prev + 1))
-              break
-            case 'focus-search':
-              searchInputRef.current?.focus()
-              break
-            case 'escape':
-              setSelectedComments(new Set())
-              setReplyingTo(null)
-              break
-            case 'select-all':
-              setSelectedComments(new Set(filteredComments.map(c => c.id)))
-              break
-            case 'deselect-all':
-              setSelectedComments(new Set())
-              break
-            default:
-              // Handle other shortcuts
-              break
-          }
-        }}
-      />
+    {/* Keyboard shortcuts disabled */}
     </div>
   )
 }

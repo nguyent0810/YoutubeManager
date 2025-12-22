@@ -28,7 +28,7 @@ export class SettingsService {
         defaultView: 'dashboard',
         sidebarCollapsed: false,
         showQuickActions: true,
-        enableKeyboardShortcuts: true
+        enableKeyboardShortcuts: false
       },
 
       // Upload & Publishing Settings

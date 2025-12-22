@@ -304,37 +304,15 @@ export class SettingsIntegrationService {
    * Apply keyboard shortcuts
    */
   applyKeyboardShortcuts(enabled) {
-    console.log('⌨️ Applying keyboard shortcuts:', enabled)
-    
-    if (enabled) {
-      this.registerKeyboardShortcuts()
-    } else {
-      this.unregisterKeyboardShortcuts()
-    }
+    console.log('⌨️ Keyboard shortcuts disabled by configuration')
+    this.unregisterKeyboardShortcuts()
   }
 
   /**
    * Register keyboard shortcuts
    */
   registerKeyboardShortcuts() {
-    const shortcuts = settingsService.get('workflow.shortcuts') || {}
-    
-    // Remove existing shortcuts
-    this.unregisterKeyboardShortcuts()
-    
-    // Register new shortcuts
-    this.keyboardHandler = (event) => {
-      const key = this.getKeyCombo(event)
-      
-      Object.entries(shortcuts).forEach(([action, shortcut]) => {
-        if (key === shortcut) {
-          event.preventDefault()
-          this.executeShortcut(action)
-        }
-      })
-    }
-    
-    document.addEventListener('keydown', this.keyboardHandler)
+    // Intentionally disabled
   }
 
   /**
