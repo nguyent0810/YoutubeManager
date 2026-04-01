@@ -9,6 +9,82 @@ import type {
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 
+/** Thrown when the YouTube Data API returns a structured error; includes HTTP status for API routes. */
+export class YouTubeApiError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number
+  ) {
+    super(message)
+    this.name = "YouTubeApiError"
+  }
+}
+
+function youtubeErrorFromResponse(status: number, raw: string): never {
+  let reason: string | undefined
+  let apiMsg: string | undefined
+
+  try {
+    const j = JSON.parse(raw) as {
+      error?: {
+        message?: string
+        errors?: Array<{ reason?: string; message?: string }>
+      }
+    }
+    reason = j.error?.errors?.[0]?.reason
+    apiMsg = j.error?.message
+  } catch {
+    // non-JSON body
+  }
+
+  if (reason === "accessNotConfigured") {
+    throw new YouTubeApiError(
+      "YouTube Data API v3 is not enabled. In Google Cloud Console → APIs & Services → Library, enable “YouTube Data API v3” for the project that owns your OAuth client ID.",
+      403
+    )
+  }
+
+  if (reason === "insufficientPermissions" || reason === "forbidden") {
+    throw new YouTubeApiError(
+      "YouTube denied access (insufficient permissions). Sign out of this app, sign in again, and accept all Google permissions. You can also remove the app at https://myaccount.google.com/permissions and retry.",
+      403
+    )
+  }
+
+  if (reason === "youtubeSignupRequired") {
+    throw new YouTubeApiError(
+      "This Google account does not have a YouTube channel. Create one at https://www.youtube.com and try again.",
+      400
+    )
+  }
+
+  if (reason === "quotaExceeded" || reason === "dailyLimitExceeded") {
+    throw new YouTubeApiError(
+      "YouTube Data API quota exceeded. Try again later or request a quota increase in Google Cloud Console.",
+      429
+    )
+  }
+
+  if (apiMsg) {
+    throw new YouTubeApiError(
+      `YouTube API: ${apiMsg}${reason ? ` (${reason})` : ""}`,
+      status >= 400 && status < 600 ? status : 500
+    )
+  }
+
+  throw new YouTubeApiError(
+    `YouTube API request failed (${status}): ${raw.slice(0, 280) || "Unknown error"}`,
+    status >= 400 && status < 600 ? status : 500
+  )
+}
+
+async function parseYouTubeResponse<T>(res: Response): Promise<T> {
+  const raw = await res.text()
+  if (!res.ok) youtubeErrorFromResponse(res.status, raw)
+  if (!raw.trim()) return {} as T
+  return JSON.parse(raw) as T
+}
+
 async function getAuthHeader(): Promise<HeadersInit> {
   const session = await auth()
   const accessToken = session?.accessToken
@@ -46,11 +122,7 @@ export async function getMyChannel(): Promise<YouTubeChannel> {
     { headers }
   )
 
-  if (!res.ok) {
-    throw new Error(`Failed to fetch channel: ${res.statusText}`)
-  }
-
-  const data = (await res.json()) as {
+  const data = await parseYouTubeResponse<{
     items?: Array<{
       id: string
       snippet: {
@@ -66,7 +138,7 @@ export async function getMyChannel(): Promise<YouTubeChannel> {
         viewCount: string
       }
     }>
-  }
+  }>(res)
   const channel = data.items?.[0]
 
   if (!channel) {
@@ -114,12 +186,11 @@ export async function getChannelVideos(
     `${YOUTUBE_API_BASE}/search?${searchParams.toString()}`,
     { headers }
   )
-  if (!searchRes.ok) throw new Error(`Search failed: ${searchRes.statusText}`)
-  const searchData = (await searchRes.json()) as {
+  const searchData = await parseYouTubeResponse<{
     items?: YouTubeSearchItem[]
     nextPageToken?: string
     pageInfo: { totalResults: number }
-  }
+  }>(searchRes)
 
   const videoIds =
     searchData.items?.map((item) => item.id.videoId).filter(Boolean).join(",") ||
@@ -138,8 +209,9 @@ export async function getChannelVideos(
     `${YOUTUBE_API_BASE}/videos?${videoParams.toString()}`,
     { headers }
   )
-  if (!videoRes.ok) throw new Error(`Videos failed: ${videoRes.statusText}`)
-  const videoData = (await videoRes.json()) as { items: YouTubeVideo[] }
+  const videoData = await parseYouTubeResponse<{ items: YouTubeVideo[] }>(
+    videoRes
+  )
 
   let videos = videoData.items ?? []
   if (privacy !== "all") {
@@ -160,8 +232,7 @@ export async function getVideoDetails(videoId: string): Promise<YouTubeVideo> {
     { headers }
   )
 
-  if (!res.ok) throw new Error(`Failed to fetch video: ${res.statusText}`)
-  const data = (await res.json()) as { items?: YouTubeVideo[] }
+  const data = await parseYouTubeResponse<{ items?: YouTubeVideo[] }>(res)
 
   if (!data.items?.length) throw new Error("Video not found.")
 
@@ -200,13 +271,7 @@ export async function updateVideoMetadata(
     }
   )
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Failed to update video: ${res.statusText} ${text.slice(0, 120)}`)
-  }
-
-  const data = (await res.json()) as YouTubeVideo
-  return data
+  return parseYouTubeResponse<YouTubeVideo>(res)
 }
 
 export interface YouTubePlaylistSnippet {
@@ -227,8 +292,7 @@ export async function listMyPlaylists(
     `${YOUTUBE_API_BASE}/playlists?part=snippet&mine=true&maxResults=${maxResults}`,
     { headers }
   )
-  if (!res.ok) throw new Error(`Playlists failed: ${res.statusText}`)
-  const data = (await res.json()) as { items?: YouTubePlaylist[] }
+  const data = await parseYouTubeResponse<{ items?: YouTubePlaylist[] }>(res)
   return data.items ?? []
 }
 
@@ -253,8 +317,5 @@ export async function insertPlaylistItem(
       }),
     }
   )
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Playlist insert failed: ${res.statusText} ${text.slice(0, 120)}`)
-  }
+  await parseYouTubeResponse<unknown>(res)
 }

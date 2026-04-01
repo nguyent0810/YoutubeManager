@@ -51,6 +51,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 The app uses Google as a **confidential** OAuth client (client secret) with **state** checks only, so PKCE cookies are not required. If you still see this on an older deploy, redeploy after pulling the latest `auth` config. Also confirm `AUTH_URL` matches the browser URL exactly (scheme + host, no trailing slash) and that Google’s redirect URI matches `/api/auth/callback/google` for that host.
 
+### Troubleshooting: `GET /api/youtube/channel` returns 403 / “Forbidden”
+
+1. **Enable YouTube Data API v3** in the **same Google Cloud project** as your OAuth client: [APIs & Services → Library](https://console.cloud.google.com/apis/library) → search “YouTube Data API v3” → **Enable**. Without this, Google returns `accessNotConfigured` and the channel request fails with HTTP 403.
+
+2. **Re-consent after scope changes:** Sign out of the app, sign in again, and accept all requested permissions. If you previously approved the app without YouTube scopes, the access token will not work for `channels.list` until you complete a fresh consent with `youtube.readonly` / `youtube` in scope.
+
+3. **YouTube channel:** The Google account must have a YouTube channel. Brand accounts or accounts that never opened YouTube may need to create a channel first.
+
 ## Structure
 
 - `src/app/` — App Router routes, API routes, layouts

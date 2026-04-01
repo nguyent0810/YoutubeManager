@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { YouTubeApiError } from "@/lib/youtube"
 
 export type ApiErrorBody = { error: string; code?: string }
 
@@ -22,5 +23,12 @@ export function isUnauthorizedMessage(message: string): boolean {
 export function statusFromYouTubeError(message: string): number {
   if (isUnauthorizedMessage(message)) return 401
   if (message.includes("quota") || message.includes("Quota")) return 429
+  return 500
+}
+
+/** Prefer `YouTubeApiError.statusCode` when present; otherwise infer from message. */
+export function httpStatusFromError(error: unknown): number {
+  if (error instanceof YouTubeApiError) return error.statusCode
+  if (error instanceof Error) return statusFromYouTubeError(error.message)
   return 500
 }

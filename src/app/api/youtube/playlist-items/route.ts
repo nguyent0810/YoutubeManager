@@ -1,4 +1,4 @@
-import { jsonError, statusFromYouTubeError } from "@/lib/api-response"
+import { httpStatusFromError, jsonError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
 import { insertPlaylistItem } from "@/lib/youtube"
 import { z } from "zod"
@@ -20,6 +20,6 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to add to playlist"
     logApiError("POST /api/youtube/playlist-items", error)
-    return jsonError(message, statusFromYouTubeError(message))
+    return jsonError(message, httpStatusFromError(error))
   }
 }

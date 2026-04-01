@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { jsonError, statusFromYouTubeError } from "@/lib/api-response"
+import { httpStatusFromError, jsonError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
 import { getVideoDetails, updateVideoMetadata } from "@/lib/youtube"
 
@@ -29,7 +29,7 @@ export async function GET(
   } catch (error: unknown) {
     const message = errorMessage(error)
     logApiError("GET /api/youtube/videos/[id]", error)
-    return jsonError(message, statusFromYouTubeError(message))
+    return jsonError(message, httpStatusFromError(error))
   }
 }
 
@@ -52,6 +52,6 @@ export async function PATCH(
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Update failed"
     logApiError("PATCH /api/youtube/videos/[id]", error)
-    return jsonError(message, statusFromYouTubeError(message))
+    return jsonError(message, httpStatusFromError(error))
   }
 }

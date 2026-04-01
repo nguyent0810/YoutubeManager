@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from "next/server"
-import { jsonError, statusFromYouTubeError } from "@/lib/api-response"
+import { httpStatusFromError, jsonError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
 import { listVideosQuerySchema } from "@/lib/youtube-api-query"
 import { getChannelVideos } from "@/lib/youtube"
@@ -43,6 +43,6 @@ export async function GET(req: NextRequest) {
   } catch (error: unknown) {
     const message = errorMessage(error)
     logApiError("GET /api/youtube/videos", error)
-    return jsonError(message, statusFromYouTubeError(message))
+    return jsonError(message, httpStatusFromError(error))
   }
 }
