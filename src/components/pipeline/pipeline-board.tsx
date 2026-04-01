@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Pencil, Plus, Trash2 } from "lucide-react"
+import { Download, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -18,6 +18,8 @@ import {
 } from "@/hooks/use-pipeline"
 import { PipelineItemDialog } from "@/components/pipeline/pipeline-item-dialog"
 import { toast } from "@/components/ui/toast"
+import { useOrgCurrent, useOrgFeatures } from "@/hooks/use-org"
+import { orgRoleAtLeast } from "@/lib/org-role"
 
 function formatDue(iso: string | null) {
   if (!iso) return null
@@ -33,9 +35,11 @@ function formatDue(iso: string | null) {
 function PipelineCard({
   item,
   onEdit,
+  canMutate,
 }: {
   item: PipelineItemDto
   onEdit: () => void
+  canMutate: boolean
 }) {
   const del = useDeletePipelineItem()
   const update = useUpdatePipelineItem()
@@ -70,7 +74,8 @@ function PipelineCard({
           onChange={(e) =>
             changeStatus(e.target.value as PipelineStatusValue)
           }
-          className="h-8 max-w-full flex-1 rounded-md border border-input bg-background px-2 text-xs"
+          disabled={!canMutate}
+          className="h-8 max-w-full flex-1 rounded-md border border-input bg-background px-2 text-xs disabled:opacity-60"
           aria-label="Move to column"
         >
           {PIPELINE_COLUMN_ORDER.map((s) => (
@@ -85,25 +90,27 @@ function PipelineCard({
           size="icon"
           className="size-8 shrink-0"
           onClick={onEdit}
-          aria-label="Edit"
+          aria-label={canMutate ? "Edit" : "View"}
         >
           <Pencil className="size-3.5" />
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8 shrink-0 text-destructive"
-          aria-label="Delete"
-          onClick={() => {
-            if (!window.confirm("Delete this card?")) return
-            del.mutate(item.id, {
-              onError: (e: Error) => toast.error(e.message),
-            })
-          }}
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
+        {canMutate ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 text-destructive"
+            aria-label="Delete"
+            onClick={() => {
+              if (!window.confirm("Delete this card?")) return
+              del.mutate(item.id, {
+                onError: (e: Error) => toast.error(e.message),
+              })
+            }}
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        ) : null}
       </div>
     </div>
   )
@@ -111,8 +118,47 @@ function PipelineCard({
 
 export function PipelineBoard() {
   const query = usePipeline()
+  const orgQ = useOrgCurrent()
+  const featuresQ = useOrgFeatures()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editItem, setEditItem] = React.useState<PipelineItemDto | null>(null)
+
+  const canMutate = orgRoleAtLeast(orgQ.data?.activeRole, "MEMBER")
+
+  const exportCsv = async () => {
+    try {
+      const res = await fetch("/api/pipeline/export")
+      const ct = res.headers.get("Content-Type") ?? ""
+      if (!res.ok) {
+        const data: unknown = await res.json().catch(() => null)
+        const msg =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : "Export failed"
+        toast.error(msg)
+        return
+      }
+      if (!ct.includes("text/csv")) {
+        toast.error("Unexpected export response")
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      const disp = res.headers.get("Content-Disposition")
+      const m = disp?.match(/filename="([^"]+)"/)
+      a.download = m?.[1] ?? "pipeline-export.csv"
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success("Download started.")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Export failed")
+    }
+  }
 
   const byStatus = React.useMemo(() => {
     const items = query.data ?? []
@@ -155,17 +201,32 @@ export function PipelineBoard() {
           Drag-free workflow: move cards with the status dropdown or open to
           edit details.
         </p>
-        <Button
-          type="button"
-          size="sm"
-          className="gap-2"
-          onClick={() => {
-            setEditItem(null)
-            setDialogOpen(true)
-          }}
-        >
-          <Plus className="size-4" /> New card
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {featuresQ.data?.exports ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={() => void exportCsv()}
+            >
+              <Download className="size-4" /> Export CSV
+            </Button>
+          ) : null}
+          {canMutate ? (
+            <Button
+              type="button"
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                setEditItem(null)
+                setDialogOpen(true)
+              }}
+            >
+              <Plus className="size-4" /> New card
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {query.isLoading ? (
@@ -192,6 +253,7 @@ export function PipelineBoard() {
                   <PipelineCard
                     key={item.id}
                     item={item}
+                    canMutate={canMutate}
                     onEdit={() => {
                       setEditItem(item)
                       setDialogOpen(true)
@@ -211,6 +273,7 @@ export function PipelineBoard() {
           setEditItem(null)
         }}
         initial={editItem}
+        canEdit={canMutate}
       />
     </>
   )

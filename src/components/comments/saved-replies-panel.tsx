@@ -10,6 +10,8 @@ import {
   useDeleteSavedReply,
   useSavedReplies,
 } from "@/hooks/use-saved-replies"
+import { useOrgCurrent } from "@/hooks/use-org"
+import { orgRoleAtLeast } from "@/lib/org-role"
 import { toast } from "@/components/ui/toast"
 
 export function SavedRepliesPanel({
@@ -18,10 +20,12 @@ export function SavedRepliesPanel({
   onInsert: (text: string) => void
 }) {
   const query = useSavedReplies()
+  const orgQ = useOrgCurrent()
   const create = useCreateSavedReply()
   const del = useDeleteSavedReply()
   const [title, setTitle] = React.useState("")
   const [body, setBody] = React.useState("")
+  const canMutate = orgRoleAtLeast(orgQ.data?.activeRole, "MEMBER")
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -72,27 +76,34 @@ export function SavedRepliesPanel({
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <form onSubmit={handleCreate} className="space-y-2">
-          <Input
-            placeholder="Short label"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <textarea
-            placeholder="Reply text"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={3}
-            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          <Button
-            type="submit"
-            size="sm"
-            disabled={create.isPending || !title.trim() || !body.trim()}
-          >
-            {create.isPending ? "Saving…" : "Save template"}
-          </Button>
-        </form>
+        {canMutate ? (
+          <form onSubmit={handleCreate} className="space-y-2">
+            <Input
+              placeholder="Short label"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <textarea
+              placeholder="Reply text"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={3}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              disabled={create.isPending || !title.trim() || !body.trim()}
+            >
+              {create.isPending ? "Saving…" : "Save template"}
+            </Button>
+          </form>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Viewer role: you can use templates but not edit them. Ask an owner
+            to change your role on Team.
+          </p>
+        )}
 
         <ul className="space-y-2">
           {query.isLoading ? (
@@ -119,20 +130,22 @@ export function SavedRepliesPanel({
                     >
                       Use
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive"
-                      aria-label={`Delete ${r.title}`}
-                      onClick={() =>
-                        del.mutate(r.id, {
-                          onError: (err: Error) => toast.error(err.message),
-                        })
-                      }
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    {canMutate ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        aria-label={`Delete ${r.title}`}
+                        onClick={() =>
+                          del.mutate(r.id, {
+                            onError: (err: Error) => toast.error(err.message),
+                          })
+                        }
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               </li>

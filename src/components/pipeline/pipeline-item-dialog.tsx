@@ -28,10 +28,12 @@ export function PipelineItemDialog({
   open,
   onClose,
   initial,
+  canEdit = true,
 }: {
   open: boolean
   onClose: () => void
   initial: PipelineItemDto | null
+  canEdit?: boolean
 }) {
   const create = useCreatePipelineItem()
   const update = useUpdatePipelineItem()
@@ -65,6 +67,7 @@ export function PipelineItemDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!canEdit) return
     if (!title.trim()) return
 
     if (initial) {
@@ -118,7 +121,11 @@ export function PipelineItemDialog({
       <Card className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden shadow-xl motion-reduce:transition-none animate-in zoom-in-95 fade-in-0">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="text-lg font-semibold">
-            {initial ? "Edit card" : "New pipeline card"}
+            {initial
+              ? canEdit
+                ? "Edit card"
+                : "View card"
+              : "New pipeline card"}
           </h2>
           <Button
             type="button"
@@ -143,6 +150,8 @@ export function PipelineItemDialog({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
+              readOnly={!canEdit}
+              disabled={!canEdit}
             />
           </div>
           <div className="space-y-2">
@@ -154,6 +163,8 @@ export function PipelineItemDialog({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={5}
+              readOnly={!canEdit}
+              disabled={!canEdit}
               className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
@@ -167,6 +178,7 @@ export function PipelineItemDialog({
               onChange={(e) =>
                 setStatus(e.target.value as PipelineStatusValue)
               }
+              disabled={!canEdit}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {PIPELINE_COLUMN_ORDER.map((s) => (
@@ -185,6 +197,8 @@ export function PipelineItemDialog({
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
+              readOnly={!canEdit}
+              disabled={!canEdit}
             />
           </div>
           <div className="space-y-2">
@@ -196,15 +210,19 @@ export function PipelineItemDialog({
               placeholder="e.g. after publishing"
               value={youtubeVideoId}
               onChange={(e) => setYoutubeVideoId(e.target.value)}
+              readOnly={!canEdit}
+              disabled={!canEdit}
             />
           </div>
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {canEdit ? "Cancel" : "Close"}
             </Button>
-            <Button type="submit" disabled={busy}>
-              {busy ? "Saving…" : initial ? "Save" : "Create"}
-            </Button>
+            {canEdit ? (
+              <Button type="submit" disabled={busy}>
+                {busy ? "Saving…" : initial ? "Save" : "Create"}
+              </Button>
+            ) : null}
           </div>
         </form>
       </Card>

@@ -16,4 +16,6 @@ export const queryKeys = {
   commentThreads: (videoId: string) =>
     ["youtube", "commentThreads", videoId] as const,
   pipeline: ["pipeline"] as const,
+  orgCurrent: ["orgs", "current"] as const,
+  orgFeatures: ["orgs", "current", "features"] as const,
 }

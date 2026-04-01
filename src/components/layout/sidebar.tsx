@@ -7,6 +7,7 @@ import {
   Columns3,
   LayoutDashboard,
   MessageSquare,
+  Users,
   Video,
   Settings,
   type LucideIcon,
@@ -20,6 +21,7 @@ const ICONS: Record<(typeof DASHBOARD_NAV)[number]["icon"], LucideIcon> = {
   "bar-chart-3": BarChart3,
   "message-square": MessageSquare,
   "columns-3": Columns3,
+  users: Users,
   settings: Settings,
 }
 

@@ -3,20 +3,16 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { httpStatusFromError, jsonError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
-import { getSessionUserId } from "@/lib/session-user"
+import {
+  dbUnavailable,
+  requireOrgRead,
+  requireOrgWrite,
+} from "@/lib/api-org-context"
 
 const createSchema = z.object({
   title: z.string().min(1).max(120),
   body: z.string().min(1).max(8000),
 })
-
-function dbUnavailable() {
-  return jsonError(
-    "Database is not configured. Add DATABASE_URL (e.g. Neon Postgres) and run migrations.",
-    503,
-    "db_unconfigured"
-  )
-}
 
 export async function GET() {
   try {
@@ -26,11 +22,11 @@ export async function GET() {
     }
     if (!process.env.DATABASE_URL) return dbUnavailable()
 
-    const userId = await getSessionUserId()
-    if (!userId) return jsonError("Unauthorized", 401)
+    const ctx = await requireOrgRead()
+    if (ctx instanceof Response) return ctx
 
     const rows = await prisma.savedReply.findMany({
-      where: { userId },
+      where: { organizationId: ctx.organizationId },
       orderBy: { updatedAt: "desc" },
     })
     return Response.json({ replies: rows })
@@ -51,8 +47,8 @@ export async function POST(req: Request) {
     }
     if (!process.env.DATABASE_URL) return dbUnavailable()
 
-    const userId = await getSessionUserId()
-    if (!userId) return jsonError("Unauthorized", 401)
+    const ctx = await requireOrgWrite()
+    if (ctx instanceof Response) return ctx
 
     const json: unknown = await req.json()
     const parsed = createSchema.safeParse(json)
@@ -62,7 +58,8 @@ export async function POST(req: Request) {
 
     const row = await prisma.savedReply.create({
       data: {
-        userId,
+        userId: ctx.userId,
+        organizationId: ctx.organizationId,
         title: parsed.data.title,
         body: parsed.data.body,
       },

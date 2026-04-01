@@ -44,7 +44,7 @@ Open [http://localhost:3000](http://localhost:3000).
    npx prisma migrate deploy
    ```
 
-   (Locally or in CI; `postinstall` already runs `prisma generate`.) Migrations create **`SavedReply`** (comments templates) and **`PipelineItem`** + **`PipelineStatus`** enum (content pipeline on `/dashboard/pipeline`).
+   (Locally or in CI; `postinstall` already runs `prisma generate`.) Migrations create **`SavedReply`** (comments templates) and **`PipelineItem`** + **`PipelineStatus`** enum (content pipeline on `/dashboard/pipeline`), plus **workspaces** (`Organization`, members, invites, per-org feature flags). Each signed-in user gets a personal workspace on first use; pipeline and saved replies are scoped to the **active** workspace (switch in **Settings**).
 
    If `AUTH_URL` / `NEXTAUTH_URL` are missing, `/api/auth/session` can return **500** and the dashboard shows “Could not load channel” because the session never establishes.
 
@@ -69,6 +69,17 @@ On **Vercel/serverless**, OAuth **PKCE** and **`state`** cookies often do not ro
 2. **Re-consent after scope changes:** Sign out of the app, sign in again, and accept all requested permissions. If you previously approved the app without YouTube scopes, the access token will not work for `channels.list` until you complete a fresh consent with `youtube.readonly` / `youtube` in scope.
 
 3. **YouTube channel:** The Google account must have a YouTube channel. Brand accounts or accounts that never opened YouTube may need to create a channel first.
+
+### Workspaces, roles, and feature flags
+
+- **Roles:** `VIEWER` (read pipeline/templates), `MEMBER` (edit), `ADMIN` (invites), `OWNER` (feature toggles). Team management lives under **`/dashboard/team`**.
+- **Invites:** Admins create an invite by email; the invitee must sign in with that Google account and open the copied **`/dashboard/join?token=…`** link.
+- **Feature flags (owner):** In **Settings**, owners can toggle **pipeline CSV export** and **YouTube write actions** (comments, playlist changes, video metadata updates). Deployment defaults: `FEATURE_EXPORTS_DEFAULT` and `FEATURE_YOUTUBE_WRITES_DEFAULT` (set to `false` to default new workspaces off until overridden in the DB).
+
+### Privacy and data handling
+
+- The app stores **OAuth tokens** in the Auth.js session and **workspace data** (pipeline cards, saved reply templates, org membership) in your **Postgres** database. YouTube API calls use the signed-in user’s Google permissions; we do not train models on your data.
+- **Workspace content** (pipeline, templates) is visible to **all members** of that workspace, not only the user who created a row.
 
 ### Troubleshooting: Comments — “insufficient permissions”
 

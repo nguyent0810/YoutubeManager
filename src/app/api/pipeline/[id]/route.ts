@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { httpStatusFromError, jsonError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
-import { getSessionUserId } from "@/lib/session-user"
+import { dbUnavailable, requireOrgWrite } from "@/lib/api-org-context"
 
 const patchSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -13,14 +13,6 @@ const patchSchema = z.object({
   dueDate: z.string().nullable().optional(),
   youtubeVideoId: z.string().max(32).nullable().optional(),
 })
-
-function dbUnavailable() {
-  return jsonError(
-    "Database is not configured. Add DATABASE_URL and run migrations.",
-    503,
-    "db_unconfigured"
-  )
-}
 
 function parseDueDate(
   s: string | null | undefined
@@ -40,14 +32,14 @@ export async function PATCH(
     if (!session?.user?.id) return jsonError("Unauthorized", 401)
     if (!process.env.DATABASE_URL) return dbUnavailable()
 
-    const userId = await getSessionUserId()
-    if (!userId) return jsonError("Unauthorized", 401)
+    const ctx = await requireOrgWrite()
+    if (ctx instanceof Response) return ctx
 
     const { id } = await context.params
     if (!id) return jsonError("Missing id", 400)
 
     const existing = await prisma.pipelineItem.findFirst({
-      where: { id, userId },
+      where: { id, organizationId: ctx.organizationId },
     })
     if (!existing) return jsonError("Not found", 404)
 
@@ -98,14 +90,14 @@ export async function DELETE(
     if (!session?.user?.id) return jsonError("Unauthorized", 401)
     if (!process.env.DATABASE_URL) return dbUnavailable()
 
-    const userId = await getSessionUserId()
-    if (!userId) return jsonError("Unauthorized", 401)
+    const ctx = await requireOrgWrite()
+    if (ctx instanceof Response) return ctx
 
     const { id } = await context.params
     if (!id) return jsonError("Missing id", 400)
 
     const existing = await prisma.pipelineItem.findFirst({
-      where: { id, userId },
+      where: { id, organizationId: ctx.organizationId },
     })
     if (!existing) return jsonError("Not found", 404)
 

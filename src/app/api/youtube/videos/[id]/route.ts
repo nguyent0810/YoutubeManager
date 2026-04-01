@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { auth } from "@/lib/auth"
 import { httpStatusFromError, jsonError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
+import { requireYoutubeMutationAllowed } from "@/lib/api-org-context"
 import { getVideoDetails, updateVideoMetadata } from "@/lib/youtube"
 
 const patchBodySchema = z.object({
@@ -38,6 +40,12 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth()
+    if (!session?.user?.id) return jsonError("Unauthorized", 401)
+
+    const gate = await requireYoutubeMutationAllowed()
+    if (gate instanceof Response) return gate
+
     const { id } = await context.params
     if (!id) return jsonError("Video id is required", 400)
 

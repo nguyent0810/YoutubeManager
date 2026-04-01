@@ -1,6 +1,8 @@
 import { z } from "zod"
+import { auth } from "@/lib/auth"
 import { jsonError, httpStatusFromError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
+import { requireYoutubeMutationAllowed } from "@/lib/api-org-context"
 import { insertCommentReply } from "@/lib/youtube"
 
 const bodySchema = z.object({
@@ -10,6 +12,12 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    const session = await auth()
+    if (!session?.user?.id) return jsonError("Unauthorized", 401)
+
+    const gate = await requireYoutubeMutationAllowed()
+    if (gate instanceof Response) return gate
+
     const json: unknown = await req.json()
     const parsed = bodySchema.safeParse(json)
     if (!parsed.success) {

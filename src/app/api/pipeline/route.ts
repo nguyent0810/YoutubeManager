@@ -4,7 +4,11 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { httpStatusFromError, jsonError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
-import { getSessionUserId } from "@/lib/session-user"
+import {
+  dbUnavailable,
+  requireOrgRead,
+  requireOrgWrite,
+} from "@/lib/api-org-context"
 
 const createSchema = z.object({
   title: z.string().min(1).max(200),
@@ -13,14 +17,6 @@ const createSchema = z.object({
   dueDate: z.string().optional().nullable(),
   youtubeVideoId: z.string().max(32).optional().nullable(),
 })
-
-function dbUnavailable() {
-  return jsonError(
-    "Database is not configured. Add DATABASE_URL and run migrations.",
-    503,
-    "db_unconfigured"
-  )
-}
 
 function parseDueDate(
   s: string | null | undefined
@@ -37,11 +33,11 @@ export async function GET() {
     if (!session?.user?.id) return jsonError("Unauthorized", 401)
     if (!process.env.DATABASE_URL) return dbUnavailable()
 
-    const userId = await getSessionUserId()
-    if (!userId) return jsonError("Unauthorized", 401)
+    const ctx = await requireOrgRead()
+    if (ctx instanceof Response) return ctx
 
     const items = await prisma.pipelineItem.findMany({
-      where: { userId },
+      where: { organizationId: ctx.organizationId },
       orderBy: [{ status: "asc" }, { dueDate: "asc" }, { updatedAt: "desc" }],
     })
     return Response.json({ items })
@@ -60,8 +56,8 @@ export async function POST(req: Request) {
     if (!session?.user?.id) return jsonError("Unauthorized", 401)
     if (!process.env.DATABASE_URL) return dbUnavailable()
 
-    const userId = await getSessionUserId()
-    if (!userId) return jsonError("Unauthorized", 401)
+    const ctx = await requireOrgWrite()
+    if (ctx instanceof Response) return ctx
 
     const json: unknown = await req.json()
     const parsed = createSchema.safeParse(json)
@@ -73,7 +69,8 @@ export async function POST(req: Request) {
 
     const row = await prisma.pipelineItem.create({
       data: {
-        userId,
+        userId: ctx.userId,
+        organizationId: ctx.organizationId,
         title: parsed.data.title,
         notes: parsed.data.notes,
         status: parsed.data.status ?? PipelineStatus.BACKLOG,
