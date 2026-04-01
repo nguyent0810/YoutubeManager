@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   BarChart3,
+  Columns3,
   LayoutDashboard,
   MessageSquare,
   Video,
@@ -18,6 +19,7 @@ const ICONS: Record<(typeof DASHBOARD_NAV)[number]["icon"], LucideIcon> = {
   video: Video,
   "bar-chart-3": BarChart3,
   "message-square": MessageSquare,
+  "columns-3": Columns3,
   settings: Settings,
 }
 

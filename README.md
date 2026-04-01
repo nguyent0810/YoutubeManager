@@ -38,13 +38,13 @@ Open [http://localhost:3000](http://localhost:3000).
 
    For **Analytics** (`/dashboard/analytics`), the same Google Cloud project should also have **YouTube Analytics API** enabled (Library → “YouTube Analytics API” → Enable), in addition to YouTube Data API v3.
 
-   **Database migrations (saved replies):** With `DATABASE_URL` in your environment, run:
+   **Database migrations:** With `DATABASE_URL` in your environment, run:
 
    ```bash
    npx prisma migrate deploy
    ```
 
-   (Locally or in CI; `postinstall` already runs `prisma generate`.) The initial migration creates the `SavedReply` table.
+   (Locally or in CI; `postinstall` already runs `prisma generate`.) Migrations create **`SavedReply`** (comments templates) and **`PipelineItem`** + **`PipelineStatus`** enum (content pipeline on `/dashboard/pipeline`).
 
    If `AUTH_URL` / `NEXTAUTH_URL` are missing, `/api/auth/session` can return **500** and the dashboard shows “Could not load channel” because the session never establishes.
 

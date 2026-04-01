@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { BarChart3, Video, Settings, ExternalLink } from "lucide-react"
+import { BarChart3, Columns3, Video, Settings, ExternalLink } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
@@ -24,6 +24,11 @@ export function QuickActions({ channelId }: { channelId?: string }) {
         <Button variant="outline" className="justify-start gap-2" asChild>
           <Link href="/dashboard/analytics">
             <BarChart3 className="size-4" /> Analytics
+          </Link>
+        </Button>
+        <Button variant="outline" className="justify-start gap-2" asChild>
+          <Link href="/dashboard/pipeline">
+            <Columns3 className="size-4" /> Pipeline
           </Link>
         </Button>
         <Button variant="outline" className="justify-start gap-2" asChild>

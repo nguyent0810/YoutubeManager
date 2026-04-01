@@ -18,3 +18,28 @@ model SavedReply {
 
   @@index([userId])
 }
+
+enum PipelineStatus {
+  BACKLOG
+  PLANNED
+  IN_PROGRESS
+  REVIEW
+  SCHEDULED
+  PUBLISHED
+}
+
+/// Content pipeline / calendar cards (per signed-in user).
+model PipelineItem {
+  id             String         @id @default(cuid())
+  userId         String
+  title          String
+  notes          String         @db.Text
+  status         PipelineStatus @default(BACKLOG)
+  dueDate        DateTime?
+  youtubeVideoId String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+}
