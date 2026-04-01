@@ -14,6 +14,10 @@ export function VideoListView({
   hasNextPage,
   isFetchingNextPage,
   onLoadMore,
+  selectionEnabled,
+  bulkSelectedIds,
+  onBulkToggle,
+  onBulkSelectAll,
 }: {
   videos: YouTubeVideo[]
   layout: "grid" | "list"
@@ -23,7 +27,16 @@ export function VideoListView({
   hasNextPage?: boolean
   isFetchingNextPage?: boolean
   onLoadMore?: () => void
+  selectionEnabled?: boolean
+  bulkSelectedIds?: string[]
+  onBulkToggle?: (id: string) => void
+  onBulkSelectAll?: () => void
 }) {
+  const bulkSet = new Set(bulkSelectedIds ?? [])
+  const ids = videos.map((v) => v.id)
+  const allOnPageSelected =
+    ids.length > 0 && ids.every((id) => bulkSet.has(id))
+
   if (loading) {
     return (
       <div
@@ -57,6 +70,19 @@ export function VideoListView({
 
   return (
     <div className="space-y-8">
+      {selectionEnabled && onBulkSelectAll ? (
+        <div className="flex flex-wrap items-center gap-3 border-b border-border pb-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={allOnPageSelected}
+              onChange={() => onBulkSelectAll?.()}
+              className="size-4 rounded border-input accent-primary"
+            />
+            Select all on this page
+          </label>
+        </div>
+      ) : null}
       <div
         className={
           layout === "grid"
@@ -71,6 +97,9 @@ export function VideoListView({
             layout={layout}
             selected={selectedId === v.id}
             onSelect={() => onSelect(v.id)}
+            selectionEnabled={selectionEnabled}
+            bulkSelected={bulkSet.has(v.id)}
+            onBulkToggle={() => onBulkToggle?.(v.id)}
           />
         ))}
       </div>

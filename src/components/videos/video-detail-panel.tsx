@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { useQuery } from "@tanstack/react-query"
-import { X, ExternalLink } from "lucide-react"
+import { X, ExternalLink, Pencil } from "lucide-react"
 import type { YouTubeVideo } from "@/types/youtube"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -15,24 +15,21 @@ import {
   formatPercentage,
   calculateEngagementRate,
 } from "@/lib/utils"
-
-async function fetchVideo(id: string): Promise<YouTubeVideo> {
-  const res = await fetch(`/api/youtube/videos/${id}`)
-  const data = (await res.json()) as { error?: string } & YouTubeVideo
-  if (!res.ok) throw new Error(data.error || "Failed to load video")
-  return data
-}
+import { queryKeys } from "@/lib/query-keys"
+import { fetchVideoById } from "@/lib/youtube-client"
 
 export function VideoDetailPanel({
   videoId,
   onClose,
+  onEditMetadata,
 }: {
   videoId: string | null
   onClose: () => void
+  onEditMetadata?: () => void
 }) {
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["youtube", "video", videoId],
-    queryFn: () => fetchVideo(videoId!),
+    queryKey: queryKeys.video(videoId ?? undefined),
+    queryFn: () => fetchVideoById(videoId!),
     enabled: !!videoId,
   })
 
@@ -80,14 +77,20 @@ export function VideoDetailPanel({
           </div>
         )}
         {data && !isLoading && (
-          <VideoDetailContent video={data} />
+          <VideoDetailContent video={data} onEditMetadata={onEditMetadata} />
         )}
       </div>
     </aside>
   )
 }
 
-function VideoDetailContent({ video }: { video: YouTubeVideo }) {
+function VideoDetailContent({
+  video,
+  onEditMetadata,
+}: {
+  video: YouTubeVideo
+  onEditMetadata?: () => void
+}) {
   const thumb =
     video.snippet.thumbnails.high?.url ||
     video.snippet.thumbnails.medium?.url ||
@@ -139,6 +142,16 @@ function VideoDetailContent({ video }: { video: YouTubeVideo }) {
       <p className="line-clamp-6 whitespace-pre-wrap text-sm text-muted-foreground">
         {video.snippet.description || "No description"}
       </p>
+      {onEditMetadata ? (
+        <Button
+          type="button"
+          className="w-full gap-2"
+          variant="secondary"
+          onClick={onEditMetadata}
+        >
+          <Pencil className="size-4" /> Edit metadata
+        </Button>
+      ) : null}
       <Button className="w-full gap-2" variant="outline" asChild>
         <a href={watchUrl} target="_blank" rel="noopener noreferrer">
           <ExternalLink className="size-4" /> Open on YouTube

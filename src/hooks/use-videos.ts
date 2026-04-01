@@ -2,25 +2,28 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
+import type { VideoSearchOrder } from "@/lib/youtube"
 import type { YouTubeVideosResponse } from "@/types/youtube"
 
 export interface UseVideosFilters {
   q?: string
   privacy?: string
+  order?: VideoSearchOrder
 }
 
 export function useVideos(
   channelId: string | undefined,
   filters: UseVideosFilters = {}
 ) {
-  const { q = "", privacy = "all" } = filters
+  const { q = "", privacy = "all", order = "date" } = filters
 
   return useInfiniteQuery({
-    queryKey: queryKeys.videos(channelId, q, privacy),
+    queryKey: queryKeys.videos(channelId, q, privacy, order),
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       const params = new URLSearchParams({
         channelId: channelId!,
         maxResults: "24",
+        order,
       })
       if (pageParam) params.set("pageToken", pageParam)
       if (q.trim()) params.set("q", q.trim())
