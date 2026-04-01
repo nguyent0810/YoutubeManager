@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server"
+import { z } from "zod"
 import { jsonError, statusFromYouTubeError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
-import { getVideoDetails } from "@/lib/youtube"
+import { getVideoDetails, updateVideoMetadata } from "@/lib/youtube"
+
+const patchBodySchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+})
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -22,6 +29,29 @@ export async function GET(
   } catch (error: unknown) {
     const message = errorMessage(error)
     logApiError("GET /api/youtube/videos/[id]", error)
+    return jsonError(message, statusFromYouTubeError(message))
+  }
+}
+
+export async function PATCH(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params
+    if (!id) return jsonError("Video id is required", 400)
+
+    const body: unknown = await req.json()
+    const parsed = patchBodySchema.safeParse(body)
+    if (!parsed.success) {
+      return jsonError("Invalid body", 400, "validation_error")
+    }
+
+    const video = await updateVideoMetadata(id, parsed.data)
+    return NextResponse.json(video)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Update failed"
+    logApiError("PATCH /api/youtube/videos/[id]", error)
     return jsonError(message, statusFromYouTubeError(message))
   }
 }

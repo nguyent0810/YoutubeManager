@@ -167,3 +167,94 @@ export async function getVideoDetails(videoId: string): Promise<YouTubeVideo> {
 
   return data.items[0]
 }
+
+export async function updateVideoMetadata(
+  videoId: string,
+  updates: { title?: string; description?: string; tags?: string[] }
+): Promise<YouTubeVideo> {
+  const video = await getVideoDetails(videoId)
+  const headers = await getAuthHeader()
+
+  const snippet: Record<string, unknown> = {
+    title: updates.title ?? video.snippet.title,
+    description: updates.description ?? video.snippet.description,
+    categoryId: video.snippet.categoryId ?? "22",
+    channelId: video.snippet.channelId,
+  }
+  if (updates.tags !== undefined) {
+    snippet.tags = updates.tags
+  }
+
+  const res = await fetch(
+    `${YOUTUBE_API_BASE}/videos?part=snippet`,
+    {
+      method: "PUT",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: videoId,
+        snippet,
+      }),
+    }
+  )
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to update video: ${res.statusText} ${text.slice(0, 120)}`)
+  }
+
+  const data = (await res.json()) as YouTubeVideo
+  return data
+}
+
+export interface YouTubePlaylistSnippet {
+  title: string
+  description: string
+}
+
+export interface YouTubePlaylist {
+  id: string
+  snippet: YouTubePlaylistSnippet
+}
+
+export async function listMyPlaylists(
+  maxResults = 25
+): Promise<YouTubePlaylist[]> {
+  const headers = await getAuthHeader()
+  const res = await fetch(
+    `${YOUTUBE_API_BASE}/playlists?part=snippet&mine=true&maxResults=${maxResults}`,
+    { headers }
+  )
+  if (!res.ok) throw new Error(`Playlists failed: ${res.statusText}`)
+  const data = (await res.json()) as { items?: YouTubePlaylist[] }
+  return data.items ?? []
+}
+
+export async function insertPlaylistItem(
+  playlistId: string,
+  videoId: string
+): Promise<void> {
+  const headers = await getAuthHeader()
+  const res = await fetch(
+    `${YOUTUBE_API_BASE}/playlistItems?part=snippet`,
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        snippet: {
+          playlistId,
+          resourceId: { kind: "youtube#video", videoId },
+        },
+      }),
+    }
+  )
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Playlist insert failed: ${res.statusText} ${text.slice(0, 120)}`)
+  }
+}
