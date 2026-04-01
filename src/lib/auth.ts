@@ -15,9 +15,18 @@ const googleProviderScopes = [
 const authSecret =
   process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET
 
+/**
+ * Auth.js must trust the incoming Host on Vercel/serverless; otherwise
+ * /api/auth/session returns 500 ("problem with the server configuration").
+ */
+const trustHost =
+  process.env.NODE_ENV === "development" ||
+  process.env.VERCEL === "1" ||
+  process.env.AUTH_TRUST_HOST === "true"
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   secret: authSecret,
-  trustHost: process.env.NODE_ENV === "development",
+  trustHost,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,

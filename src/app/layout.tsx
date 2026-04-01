@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
 import { Providers } from "@/components/providers"
+import { getSiteUrl } from "@/lib/site-url"
 import "./globals.css"
 
 const inter = Inter({
@@ -14,9 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXTAUTH_URL ?? "http://localhost:3000"
-  ),
+  metadataBase: new URL(getSiteUrl()),
   title: {
     default: "YTM Web — Premium Creator Tool",
     template: "%s | YTM Web",
