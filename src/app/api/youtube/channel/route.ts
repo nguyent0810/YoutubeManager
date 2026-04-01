@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { jsonError, statusFromYouTubeError } from "@/lib/api-response"
+import { logApiError } from "@/lib/logger"
 import { getMyChannel } from "@/lib/youtube"
 
 function errorMessage(error: unknown): string {
@@ -11,9 +13,8 @@ export async function GET() {
     const channel = await getMyChannel()
     return NextResponse.json(channel)
   } catch (error: unknown) {
-    console.error("Error fetching channel:", error)
     const message = errorMessage(error)
-    const status = message.includes("Unauthorized") ? 401 : 500
-    return NextResponse.json({ error: message }, { status })
+    logApiError("GET /api/youtube/channel", error)
+    return jsonError(message, statusFromYouTubeError(message))
   }
 }

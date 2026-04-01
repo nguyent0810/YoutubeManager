@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query"
 import type { YouTubeChannel } from "@/types/youtube"
+import { queryKeys } from "@/lib/query-keys"
 
 async function fetchChannel(): Promise<YouTubeChannel> {
   const res = await fetch("/api/youtube/channel")
@@ -21,7 +22,7 @@ async function fetchChannel(): Promise<YouTubeChannel> {
 
 export function useChannel() {
   return useQuery({
-    queryKey: ["youtube", "channel"],
+    queryKey: queryKeys.channel,
     queryFn: fetchChannel,
   })
 }

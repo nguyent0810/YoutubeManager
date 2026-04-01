@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/layout/sidebar"
 import { DashboardHeader } from "@/components/layout/header"
+import { SessionAlert } from "@/components/session-alert"
 
 export default function DashboardLayout({
   children,
@@ -13,7 +14,10 @@ export default function DashboardLayout({
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <DashboardHeader />
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 p-4 md:p-6">
+          <SessionAlert />
+          {children}
+        </main>
       </div>
     </div>
   )

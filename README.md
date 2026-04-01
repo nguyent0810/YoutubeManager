@@ -47,6 +47,10 @@ Open [http://localhost:3000](http://localhost:3000).
 
 **Preview deployments:** Either leave `AUTH_URL` unset so the app uses `VERCEL_URL`, or set per-environment URLs in Vercel. Each preview hostname needs its own redirect URI in Google if you test OAuth there.
 
+### Troubleshooting: `InvalidCheck: pkceCodeVerifier value could not be parsed`
+
+The app uses Google as a **confidential** OAuth client (client secret) with **state** checks only, so PKCE cookies are not required. If you still see this on an older deploy, redeploy after pulling the latest `auth` config. Also confirm `AUTH_URL` matches the browser URL exactly (scheme + host, no trailing slash) and that Google’s redirect URI matches `/api/auth/callback/google` for that host.
+
 ## Structure
 
 - `src/app/` — App Router routes, API routes, layouts

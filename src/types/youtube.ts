@@ -15,6 +15,9 @@ export interface YouTubeVideoSnippet {
   channelId: string
   title: string
   description: string
+  categoryId?: string
+  tags?: string[]
+  defaultLanguage?: string
   thumbnails: {
     default: { url: string; width: number; height: number }
     medium: { url: string; width: number; height: number }

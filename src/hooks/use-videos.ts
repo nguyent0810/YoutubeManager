@@ -1,6 +1,7 @@
 "use client"
 
 import { useInfiniteQuery } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 import type { YouTubeVideosResponse } from "@/types/youtube"
 
 export interface UseVideosFilters {
@@ -15,7 +16,7 @@ export function useVideos(
   const { q = "", privacy = "all" } = filters
 
   return useInfiniteQuery({
-    queryKey: ["youtube", "videos", channelId, q, privacy],
+    queryKey: queryKeys.videos(channelId, q, privacy),
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       const params = new URLSearchParams({
         channelId: channelId!,

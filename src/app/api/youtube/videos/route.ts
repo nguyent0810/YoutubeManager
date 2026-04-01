@@ -1,53 +1,48 @@
 import { NextResponse, NextRequest } from "next/server"
+import { jsonError, statusFromYouTubeError } from "@/lib/api-response"
+import { logApiError } from "@/lib/logger"
+import { listVideosQuerySchema } from "@/lib/youtube-api-query"
 import { getChannelVideos } from "@/lib/youtube"
-import type { PrivacyStatus } from "@/types/youtube"
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   return "Failed to fetch videos"
 }
 
-const PRIVACY: Array<PrivacyStatus | "all"> = [
-  "all",
-  "public",
-  "private",
-  "unlisted",
-]
-
-function parsePrivacy(value: string | null): PrivacyStatus | "all" {
-  if (!value || !PRIVACY.includes(value as PrivacyStatus | "all")) return "all"
-  return value as PrivacyStatus | "all"
-}
-
 export async function GET(req: NextRequest) {
   try {
-    const searchParams = req.nextUrl.searchParams
-    const channelId = searchParams.get("channelId")
-    const pageToken = searchParams.get("pageToken") || undefined
-    const maxResults = searchParams.get("maxResults")
-      ? parseInt(searchParams.get("maxResults")!, 10)
-      : 50
-    const q = searchParams.get("q") || undefined
-    const privacy = parsePrivacy(searchParams.get("privacy"))
+    const sp = req.nextUrl.searchParams
+    const parsed = listVideosQuerySchema.safeParse({
+      channelId: sp.get("channelId") ?? "",
+      pageToken: sp.get("pageToken") || undefined,
+      maxResults: sp.get("maxResults") ?? undefined,
+      q: sp.get("q") || undefined,
+      privacy: sp.get("privacy") || undefined,
+      order: sp.get("order") || undefined,
+    })
 
-    if (!channelId) {
-      return NextResponse.json(
-        { error: "channelId is required" },
-        { status: 400 }
+    if (!parsed.success) {
+      const msg = parsed.error.flatten().fieldErrors
+      return jsonError(
+        `Invalid query: ${JSON.stringify(msg)}`,
+        400,
+        "validation_error"
       )
     }
+
+    const { channelId, pageToken, maxResults, q, privacy, order } = parsed.data
 
     const data = await getChannelVideos(channelId, {
       pageToken,
       maxResults,
       q,
       privacy,
+      order,
     })
     return NextResponse.json(data)
   } catch (error: unknown) {
-    console.error("Error fetching videos:", error)
     const message = errorMessage(error)
-    const status = message.includes("Unauthorized") ? 401 : 500
-    return NextResponse.json({ error: message }, { status })
+    logApiError("GET /api/youtube/videos", error)
+    return jsonError(message, statusFromYouTubeError(message))
   }
 }

@@ -23,11 +23,20 @@ async function getAuthHeader(): Promise<HeadersInit> {
   }
 }
 
+export type VideoSearchOrder =
+  | "date"
+  | "rating"
+  | "relevance"
+  | "title"
+  | "videoCount"
+  | "viewCount"
+
 export interface ListVideosOptions {
   pageToken?: string
   maxResults?: number
   q?: string
   privacy?: PrivacyStatus | "all"
+  order?: VideoSearchOrder
 }
 
 export async function getMyChannel(): Promise<YouTubeChannel> {
@@ -87,12 +96,13 @@ export async function getChannelVideos(
     maxResults = 50,
     q,
     privacy = "all",
+    order = "date",
   } = options
 
   const searchParams = new URLSearchParams({
     part: "snippet",
     channelId,
-    order: "date",
+    order,
     type: "video",
     maxResults: String(maxResults),
   })

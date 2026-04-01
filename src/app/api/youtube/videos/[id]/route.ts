@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { jsonError, statusFromYouTubeError } from "@/lib/api-response"
+import { logApiError } from "@/lib/logger"
 import { getVideoDetails } from "@/lib/youtube"
 
 function errorMessage(error: unknown): string {
@@ -13,14 +15,13 @@ export async function GET(
   try {
     const { id } = await context.params
     if (!id) {
-      return NextResponse.json({ error: "Video id is required" }, { status: 400 })
+      return jsonError("Video id is required", 400)
     }
     const video = await getVideoDetails(id)
     return NextResponse.json(video)
   } catch (error: unknown) {
-    console.error("Error fetching video:", error)
     const message = errorMessage(error)
-    const status = message.includes("Unauthorized") ? 401 : 500
-    return NextResponse.json({ error: message }, { status })
+    logApiError("GET /api/youtube/videos/[id]", error)
+    return jsonError(message, statusFromYouTubeError(message))
   }
 }
