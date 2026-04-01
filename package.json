@@ -1,93 +1,42 @@
 {
-  "name": "youtube-channel-manager",
-  "version": "1.0.0",
-  "description": "Desktop YouTube Channel Manager for Windows",
-  "main": "main.js",
-  "homepage": "./",
+  "name": "ytm-web",
+  "version": "0.1.0",
+  "description": "YouTube creator dashboard — Next.js (App Router), optimized for Vercel",
   "scripts": {
-    "dev": "npm run build && electron .",
-    "dev:web": "vite",
-    "build": "vite build",
-    "build:web": "vite build",
-    "electron": "electron .",
-    "start": "npm run build && electron .",
-    "start:web": "vite",
-    "package": "npm run build && npx electron-packager . youtube-manager --platform=win32 --arch=x64 --out=dist-packager --overwrite",
-    "build:electron": "npm run build && electron-builder",
-    "build:win": "npm run build && electron-builder --win",
-    "dist": "npm run build && electron-builder --win --publish=never",
-    "preview": "vite preview",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"
-  },
-  "keywords": [
-    "youtube",
-    "channel-manager",
-    "desktop",
-    "electron",
-    "windows"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
-  "devDependencies": {
-    "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
-    "@vitejs/plugin-react": "^4.2.1",
-    "concurrently": "^8.2.2",
-    "electron": "^28.1.0",
-    "electron-builder": "^24.9.1",
-    "electron-packager": "^17.1.2",
-    "eslint": "^8.55.0",
-    "eslint-plugin-react": "^7.33.2",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.5",
-    "vite": "^5.0.8",
-    "wait-on": "^7.2.0"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
   },
   "dependencies": {
-    "@types/react-big-calendar": "^1.16.2",
-    "autoprefixer": "^10.4.16",
-    "axios": "^1.6.2",
-    "clsx": "^2.0.0",
-    "date-fns": "^3.6.0",
-    "electron-store": "^8.1.0",
-    "googleapis": "^129.0.0",
-    "keytar": "^7.9.0",
-    "lucide-react": "^0.303.0",
-    "moment": "^2.30.1",
-    "node-fetch": "^2.7.0",
-    "postcss": "^8.4.32",
-    "react": "^18.2.0",
-    "react-beautiful-dnd": "^13.1.1",
-    "react-big-calendar": "^1.19.4",
-    "react-dnd": "^16.0.1",
-    "react-dnd-html5-backend": "^16.0.1",
-    "react-dom": "^18.2.0",
-    "react-dropzone": "^14.2.3",
-    "react-hot-toast": "^2.4.1",
-    "react-router-dom": "^6.20.1",
-    "react-window": "^1.8.11",
-    "recharts": "^2.8.0",
-    "tailwindcss": "^3.3.6"
+    "@hookform/resolvers": "^5.2.2",
+    "@tanstack/react-query": "^5.95.2",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.7.0",
+    "next": "16.2.1",
+    "next-auth": "^5.0.0-beta.30",
+    "next-themes": "^0.4.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-hook-form": "^7.72.0",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.12"
   },
-  "build": {
-    "appId": "com.yourcompany.youtube-channel-manager",
-    "productName": "YouTube Channel Manager",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "dist/**/*",
-      "main.js",
-      "preload.js",
-      "package.json"
-    ],
-    "win": {
-      "target": "portable",
-      "sign": false,
-      "verifyUpdateCodeSignature": false
-    },
-    "portable": {
-      "artifactName": "YouTube-Manager-Portable.exe"
-    }
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "tailwindcss": "^4",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   }
 }
