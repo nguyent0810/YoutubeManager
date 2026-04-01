@@ -7,6 +7,7 @@ import {
   Columns3,
   LayoutDashboard,
   MessageSquare,
+  Upload,
   Users,
   Video,
   Settings,
@@ -18,6 +19,7 @@ import { DASHBOARD_NAV, APP_NAME } from "@/lib/constants"
 const ICONS: Record<(typeof DASHBOARD_NAV)[number]["icon"], LucideIcon> = {
   "layout-dashboard": LayoutDashboard,
   video: Video,
+  upload: Upload,
   "bar-chart-3": BarChart3,
   "message-square": MessageSquare,
   "columns-3": Columns3,

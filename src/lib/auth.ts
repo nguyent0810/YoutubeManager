@@ -5,8 +5,11 @@ import { refreshGoogleAccessToken } from "@/lib/google-token"
 /** Required for YouTube Data API v3 (including private/unlisted); omitting it yields 403. */
 const YOUTUBE_READONLY_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
 
-/** Full channel/video management (metadata, playlists). Users re-consent when this changes. */
+/** Full channel/video management (metadata, playlists, uploads). Users re-consent when this changes. */
 const YOUTUBE_MANAGE_SCOPE = "https://www.googleapis.com/auth/youtube"
+
+/** Explicit upload scope (subset of `youtube`; helps consent screens list uploads clearly). */
+const YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
 
 /** Listed by Google for `comments.insert` / comment threads; ensures reply permissions after consent. */
 const YOUTUBE_FORCE_SSL_SCOPE =
@@ -20,6 +23,7 @@ const googleProviderScopes = [
   "https://www.googleapis.com/auth/yt-analytics.readonly",
   YOUTUBE_FORCE_SSL_SCOPE,
   YOUTUBE_MANAGE_SCOPE,
+  YOUTUBE_UPLOAD_SCOPE,
 ].join(" ")
 
 const authSecret =

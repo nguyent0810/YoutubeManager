@@ -8,6 +8,8 @@ import type {
 } from "@/types/youtube"
 
 const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
+const YOUTUBE_UPLOAD_BASE =
+  "https://www.googleapis.com/upload/youtube/v3/videos"
 
 /** Thrown when the YouTube Data API returns a structured error; includes HTTP status for API routes. */
 export class YouTubeApiError extends Error {
@@ -20,7 +22,7 @@ export class YouTubeApiError extends Error {
   }
 }
 
-function youtubeErrorFromResponse(status: number, raw: string): never {
+export function youtubeErrorFromResponse(status: number, raw: string): never {
   let reason: string | undefined
   let apiMsg: string | undefined
 
@@ -272,6 +274,75 @@ export async function updateVideoMetadata(
   )
 
   return parseYouTubeResponse<YouTubeVideo>(res)
+}
+
+export interface ResumableVideoUploadInit {
+  title: string
+  description?: string
+  tags?: string[]
+  categoryId?: string
+  /** Scheduled public release requires `private` + `publishAt` (YouTube API rules). */
+  privacyStatus: PrivacyStatus
+  /** RFC 3339 / ISO-8601; only when scheduling; forces private. */
+  publishAt?: string | null
+  selfDeclaredMadeForKids: boolean
+  contentLength: number
+  contentType: string
+}
+
+/**
+ * Start a resumable upload; returns the `Location` URL for chunked `PUT` requests.
+ * @see https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol
+ */
+export async function createResumableVideoUploadSession(
+  opts: ResumableVideoUploadInit
+): Promise<string> {
+  const headers = await getAuthHeader()
+
+  const status: Record<string, unknown> = {
+    privacyStatus: opts.privacyStatus,
+    selfDeclaredMadeForKids: opts.selfDeclaredMadeForKids,
+  }
+  if (opts.publishAt) {
+    status.publishAt = opts.publishAt
+  }
+
+  const snippet: Record<string, unknown> = {
+    title: opts.title,
+    description: opts.description ?? "",
+    categoryId: opts.categoryId ?? "22",
+  }
+  if (opts.tags?.length) {
+    snippet.tags = opts.tags.slice(0, 30)
+  }
+
+  const initRes = await fetch(
+    `${YOUTUBE_UPLOAD_BASE}?uploadType=resumable&part=snippet,status`,
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Length": String(opts.contentLength),
+        "X-Upload-Content-Type": opts.contentType,
+      },
+      body: JSON.stringify({ snippet, status }),
+    }
+  )
+
+  if (!initRes.ok) {
+    const raw = await initRes.text()
+    youtubeErrorFromResponse(initRes.status, raw)
+  }
+
+  const location = initRes.headers.get("Location")
+  if (!location) {
+    throw new YouTubeApiError(
+      "YouTube did not return a resumable upload URL (missing Location).",
+      502
+    )
+  }
+  return location
 }
 
 export interface YouTubePlaylistSnippet {

@@ -101,7 +101,13 @@ export default function VideosPage() {
           <h1 className="text-2xl font-bold tracking-tight">Video manager</h1>
           <p className="text-sm text-muted-foreground">
             Search, sort, and select videos to edit metadata or add to a
-            playlist.
+            playlist.{" "}
+            <Link
+              href="/dashboard/upload"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Bulk upload
+            </Link>
           </p>
         </div>
         <Tabs
