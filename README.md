@@ -70,6 +70,10 @@ On **Vercel/serverless**, OAuth **PKCE** and **`state`** cookies often do not ro
 
 3. **YouTube channel:** The Google account must have a YouTube channel. Brand accounts or accounts that never opened YouTube may need to create a channel first.
 
+### Troubleshooting: Comments — “insufficient permissions”
+
+Posting replies and loading some thread data needs **`youtube.force-ssl`** and **`youtube`** scopes. If you signed in before those were added, **remove the app** at [Google Account → Third-party access](https://myaccount.google.com/permissions), then **sign in again** and approve all prompts. Comments must be allowed on the video in YouTube Studio.
+
 ## Structure
 
 - `src/app/` — App Router routes, API routes, layouts

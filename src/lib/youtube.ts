@@ -46,7 +46,7 @@ function youtubeErrorFromResponse(status: number, raw: string): never {
 
   if (reason === "insufficientPermissions" || reason === "forbidden") {
     throw new YouTubeApiError(
-      "YouTube denied access (insufficient permissions). Sign out of this app, sign in again, and accept all Google permissions. You can also remove the app at https://myaccount.google.com/permissions and retry.",
+      "YouTube denied access (insufficient permissions). Your saved login may be missing scopes for comments or uploads. Sign out, open https://myaccount.google.com/permissions , remove access for this app, then sign in again and accept every permission. If it persists, confirm the signed-in Google account owns the channel.",
       403
     )
   }

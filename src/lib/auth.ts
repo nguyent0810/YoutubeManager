@@ -8,12 +8,17 @@ const YOUTUBE_READONLY_SCOPE = "https://www.googleapis.com/auth/youtube.readonly
 /** Full channel/video management (metadata, playlists). Users re-consent when this changes. */
 const YOUTUBE_MANAGE_SCOPE = "https://www.googleapis.com/auth/youtube"
 
+/** Listed by Google for `comments.insert` / comment threads; ensures reply permissions after consent. */
+const YOUTUBE_FORCE_SSL_SCOPE =
+  "https://www.googleapis.com/auth/youtube.force-ssl"
+
 const googleProviderScopes = [
   "openid",
   "profile",
   "email",
   YOUTUBE_READONLY_SCOPE,
   "https://www.googleapis.com/auth/yt-analytics.readonly",
+  YOUTUBE_FORCE_SSL_SCOPE,
   YOUTUBE_MANAGE_SCOPE,
 ].join(" ")
 
