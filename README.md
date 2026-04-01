@@ -58,9 +58,9 @@ Open [http://localhost:3000](http://localhost:3000).
 
 **Preview deployments:** Either leave `AUTH_URL` unset so the app uses `VERCEL_URL`, or set per-environment URLs in Vercel. Each preview hostname needs its own redirect URI in Google if you test OAuth there.
 
-### Troubleshooting: `InvalidCheck: pkceCodeVerifier value could not be parsed`
+### Troubleshooting: `InvalidCheck` (pkceCodeVerifier or state `could not be parsed`)
 
-The app uses Google as a **confidential** OAuth client (client secret) with **state** checks only, so PKCE cookies are not required. If you still see this on an older deploy, redeploy after pulling the latest `auth` config. Also confirm `AUTH_URL` matches the browser URL exactly (scheme + host, no trailing slash) and that Google’s redirect URI matches `/api/auth/callback/google` for that host.
+On **Vercel/serverless**, OAuth **PKCE** and **`state`** cookies often do not round-trip on the callback request, which triggers Auth.js `InvalidCheck`. This app uses a **confidential** Google client (`client_secret`) with **`checks: []`** so sign-in does not depend on those cookies. Redeploy after pulling the latest `auth` config. Also confirm **`AUTH_URL`** matches the live URL (no trailing slash) and Google’s OAuth redirect URI includes `https://<host>/api/auth/callback/google` for that host.
 
 ### Troubleshooting: `GET /api/youtube/channel` returns 403 / “Forbidden”
 

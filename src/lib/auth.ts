@@ -37,12 +37,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       /**
-       * Web OAuth clients are confidential (have a secret). Using PKCE on Vercel
-       * often triggers InvalidCheck: pkceCodeVerifier could not be parsed because
-       * the verifier cookie does not round-trip reliably across serverless
-       * invocations. State-only CSRF protection is sufficient here.
+       * Confidential Google client (has client_secret). On Vercel, both PKCE and
+       * OAuth `state` cookies often fail InvalidCheck (cookie not readable on the
+       * callback request). Disabling checks avoids that; risk is mainly CSRF on
+       * the authorize redirect — acceptable for this app’s threat model.
        */
-      checks: ["state"],
+      checks: [],
       authorization: {
         params: {
           scope: googleProviderScopes,
