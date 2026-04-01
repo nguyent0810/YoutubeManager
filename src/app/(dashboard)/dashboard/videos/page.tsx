@@ -106,6 +106,13 @@ export default function VideosPage() {
               href="/dashboard/upload"
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
+              Upload
+            </Link>
+            {" · "}
+            <Link
+              href="/dashboard/bulk-upload"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
               Bulk upload
             </Link>
           </p>

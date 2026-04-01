@@ -2,7 +2,15 @@
 
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Loader2, Trash2, UploadCloud } from "lucide-react"
+import {
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
+  Loader2,
+  Trash2,
+  FolderOpen,
+  UploadCloud,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -30,11 +38,29 @@ type VisibilityMode = "public" | "private" | "unlisted" | "schedule"
 interface QueueRow {
   id: string
   file: File
+  /** Folder-relative path or filename (for ordering context). */
+  sortPath: string
   title: string
+  description: string
+  visibility: VisibilityMode
+  scheduleLocal: string
   status: "queued" | "uploading" | "done" | "error"
   progress: number
   error?: string
   videoId?: string
+}
+
+function isProbablyVideoFile(file: File): boolean {
+  if (file.type.startsWith("video/")) return true
+  return /\.(mp4|mov|m4v|webm|mkv|avi|mpeg|mpg|wmv|3gp)$/i.test(file.name)
+}
+
+function sortFilesByPath(files: File[]): File[] {
+  return [...files].sort((a, b) => {
+    const pa = (a as File & { webkitRelativePath?: string }).webkitRelativePath || a.name
+    const pb = (b as File & { webkitRelativePath?: string }).webkitRelativePath || b.name
+    return pa.localeCompare(pb, undefined, { numeric: true, sensitivity: "base" })
+  })
 }
 
 function parseTags(raw: string): string[] {
@@ -43,6 +69,39 @@ function parseTags(raw: string): string[] {
     .map((t) => t.trim())
     .filter(Boolean)
     .slice(0, 30)
+}
+
+function rowSortPath(file: File): string {
+  return (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+}
+
+function resolveRowPublish(
+  visibility: VisibilityMode,
+  scheduleLocal: string,
+  label: string
+): Pick<YoutubeUploadInitPayload, "privacyStatus" | "publishAt"> {
+  if (visibility === "private") {
+    return { privacyStatus: "private", publishAt: null }
+  }
+  if (visibility === "unlisted") {
+    return { privacyStatus: "unlisted", publishAt: null }
+  }
+  if (visibility === "schedule") {
+    if (!scheduleLocal.trim()) {
+      throw new Error(`Schedule date/time required for "${label}".`)
+    }
+    const when = new Date(scheduleLocal)
+    if (Number.isNaN(when.getTime())) {
+      throw new Error(`Invalid schedule for "${label}".`)
+    }
+    if (when.getTime() < Date.now() + 60_000) {
+      throw new Error(
+        `"${label}": schedule must be at least one minute from now.`
+      )
+    }
+    return { privacyStatus: "private", publishAt: when.toISOString() }
+  }
+  return { privacyStatus: "public", publishAt: null }
 }
 
 export function BulkUploadForm() {
@@ -55,45 +114,62 @@ export function BulkUploadForm() {
   })
 
   const [queue, setQueue] = React.useState<QueueRow[]>([])
-  const [description, setDescription] = React.useState("")
   const [tagsRaw, setTagsRaw] = React.useState("")
   const [categoryId, setCategoryId] = React.useState("22")
-  const [visibility, setVisibility] = React.useState<VisibilityMode>("public")
-  const [scheduleLocal, setScheduleLocal] = React.useState("")
   const [madeForKids, setMadeForKids] = React.useState(false)
   const [playlistId, setPlaylistId] = React.useState("")
   const [running, setRunning] = React.useState(false)
+  const [dragId, setDragId] = React.useState<string | null>(null)
 
+  const folderInputRef = React.useRef<HTMLInputElement>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
-  const addFiles = (list: FileList | null) => {
+  const fileToRow = (file: File): QueueRow => ({
+    id: randomId(),
+    file,
+    sortPath: rowSortPath(file),
+    title: stripExtension(file.name).slice(0, 100),
+    description: "",
+    visibility: "public",
+    scheduleLocal: "",
+    status: "queued",
+    progress: 0,
+  })
+
+  const addFilesFromList = (list: FileList | null, fromFolder: boolean) => {
     if (!list?.length) return
-    const next: QueueRow[] = []
-    for (let i = 0; i < list.length; i++) {
-      const file = list[i]
-      if (file.size <= 0) {
-        toast.error(`Skipped empty file: ${file.name}`)
-        continue
-      }
-      if (file.size > 20 * 1024 * 1024 * 1024) {
-        toast.error(`Skipped (over 20 GB): ${file.name}`)
-        continue
-      }
-      next.push({
-        id: randomId(),
-        file,
-        title: stripExtension(file.name).slice(0, 100),
-        status: "queued",
-        progress: 0,
-      })
+    const raw = Array.from(list).filter(isProbablyVideoFile)
+    if (!raw.length) {
+      toast.error("No supported video files found.")
+      return
     }
-    if (next.length) setQueue((q) => [...q, ...next])
+    const sorted = fromFolder ? sortFilesByPath(raw) : sortFilesByPath(raw)
+    const skipped = list.length - raw.length
+    if (skipped > 0) {
+      toast.success(`Skipped ${skipped} non-video file(s).`)
+    }
+    const rows = sorted.map(fileToRow)
+    setQueue((q) => [...q, ...rows])
+    toast.success(
+      `Added ${rows.length} video(s)${fromFolder ? " (sorted by path)" : ""}.`
+    )
   }
 
-  const updateTitle = (id: string, title: string) => {
-    setQueue((q) =>
-      q.map((r) => (r.id === id ? { ...r, title: title.slice(0, 100) } : r))
-    )
+  const updateRow = (id: string, patch: Partial<QueueRow>) => {
+    setQueue((q) => q.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  }
+
+  const moveRow = (id: string, dir: -1 | 1) => {
+    setQueue((q) => {
+      const i = q.findIndex((r) => r.id === id)
+      const j = i + dir
+      if (i < 0 || j < 0 || j >= q.length) return q
+      const n = [...q]
+      const t = n[i]!
+      n[i] = n[j]!
+      n[j] = t
+      return n
+    })
   }
 
   const removeRow = (id: string) => {
@@ -104,42 +180,36 @@ export function BulkUploadForm() {
     setQueue((q) => q.filter((r) => r.status !== "done"))
   }
 
-  const buildMetadataBase = (): Omit<
-    YoutubeUploadInitPayload,
-    "title" | "contentLength" | "contentType"
-  > => {
-    const tags = parseTags(tagsRaw)
-    let privacyStatus: YoutubeUploadInitPayload["privacyStatus"] = "public"
-    let publishAt: string | null | undefined
+  const clearQueue = () => {
+    if (queue.some((r) => r.status === "uploading")) return
+    setQueue([])
+  }
 
-    if (visibility === "private") privacyStatus = "private"
-    else if (visibility === "unlisted") privacyStatus = "unlisted"
-    else if (visibility === "schedule") {
-      if (!scheduleLocal.trim()) {
-        throw new Error("Pick a date and time for scheduled publishing.")
-      }
-      const when = new Date(scheduleLocal)
-      if (Number.isNaN(when.getTime())) {
-        throw new Error("Invalid schedule date.")
-      }
-      if (when.getTime() < Date.now() + 60_000) {
-        throw new Error("Schedule time must be at least one minute from now.")
-      }
-      privacyStatus = "private"
-      publishAt = when.toISOString()
-    } else {
-      privacyStatus = "public"
-      publishAt = undefined
-    }
+  const onDragStart = (e: React.DragEvent, id: string) => {
+    setDragId(id)
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/plain", id)
+  }
 
-    return {
-      description: description.trim() || undefined,
-      tags: tags.length ? tags : undefined,
-      categoryId,
-      privacyStatus,
-      publishAt: publishAt ?? null,
-      selfDeclaredMadeForKids: madeForKids,
-    }
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+  }
+
+  const onDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault()
+    const fromId = dragId ?? e.dataTransfer.getData("text/plain")
+    setDragId(null)
+    if (!fromId || fromId === targetId) return
+    setQueue((q) => {
+      const from = q.findIndex((r) => r.id === fromId)
+      const to = q.findIndex((r) => r.id === targetId)
+      if (from < 0 || to < 0) return q
+      const n = [...q]
+      const [item] = n.splice(from, 1)
+      n.splice(to, 0, item!)
+      return n
+    })
   }
 
   const runQueue = async () => {
@@ -148,18 +218,11 @@ export function BulkUploadForm() {
       return
     }
     if (!queue.length) {
-      toast.error("Add video files first.")
+      toast.error("Add files or a folder first.")
       return
     }
 
-    let base: ReturnType<typeof buildMetadataBase>
-    try {
-      base = buildMetadataBase()
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Invalid options")
-      return
-    }
-
+    const tags = parseTags(tagsRaw)
     const pending = queue.filter((r) => r.status === "queued" || r.status === "error")
     if (!pending.length) {
       toast.error("No queued items to upload.")
@@ -176,15 +239,29 @@ export function BulkUploadForm() {
         )
       )
 
+      const label = row.title.trim() || stripExtension(row.file.name).slice(0, 100)
+
       try {
-        const title = row.title.trim() || stripExtension(row.file.name).slice(0, 100)
-        if (!title) {
-          throw new Error("Title required.")
+        if (!label) throw new Error("Title required.")
+
+        let pub: Pick<YoutubeUploadInitPayload, "privacyStatus" | "publishAt">
+        try {
+          pub = resolveRowPublish(row.visibility, row.scheduleLocal, label)
+        } catch (err: unknown) {
+          throw err instanceof Error ? err : new Error(String(err))
         }
 
         const { id } = await uploadLocalFileToYoutube(
           row.file,
-          { ...base, title },
+          {
+            title: label.slice(0, 100),
+            description: row.description.trim() || undefined,
+            tags: tags.length ? tags : undefined,
+            categoryId,
+            privacyStatus: pub.privacyStatus,
+            publishAt: pub.publishAt,
+            selfDeclaredMadeForKids: madeForKids,
+          },
           (p) => {
             setQueue((q) =>
               q.map((r) => (r.id === row.id ? { ...r, progress: p } : r))
@@ -198,8 +275,8 @@ export function BulkUploadForm() {
           } catch (e: unknown) {
             toast.error(
               e instanceof Error
-                ? `Uploaded but playlist failed: ${e.message}`
-                : "Uploaded but playlist add failed."
+                ? `Uploaded "${label}" but playlist failed: ${e.message}`
+                : "Playlist add failed."
             )
           }
         }
@@ -211,7 +288,7 @@ export function BulkUploadForm() {
               : r
           )
         )
-        toast.success(`Uploaded: ${title}`)
+        toast.success(`Uploaded: ${label}`)
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Upload failed"
         setQueue((q) =>
@@ -237,8 +314,7 @@ export function BulkUploadForm() {
             <CardTitle className="text-base">Uploads blocked</CardTitle>
             <CardDescription>
               The workspace owner disabled YouTube write actions, or your role
-              cannot upload. Check Settings → workspace features or your role on
-              Team.
+              cannot upload. Check Settings or Team.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -246,29 +322,14 @@ export function BulkUploadForm() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Defaults (all files)</CardTitle>
+          <CardTitle>Shared for all videos in the queue</CardTitle>
           <CardDescription>
-            Each row can override the title. Description, tags, category, and
-            visibility apply to every file in the queue. Scheduled videos are
-            uploaded as private until YouTube publishes them at the chosen
-            time.
+            Tags, category, and “made for kids” apply to every row. Each row has
+            its own title, description, visibility, and optional schedule.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <label className="text-sm font-medium" htmlFor="bu-desc">
-                Description
-              </label>
-              <textarea
-                id="bu-desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                maxLength={5000}
-                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="bu-tags">
                 Tags (comma-separated)
@@ -297,66 +358,17 @@ export function BulkUploadForm() {
                 ))}
               </select>
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <span className="text-sm font-medium">Visibility</span>
-              <div className="flex flex-col gap-2 text-sm">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="vis"
-                    checked={visibility === "public"}
-                    onChange={() => setVisibility("public")}
-                  />
-                  Public when processing completes
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="vis"
-                    checked={visibility === "private"}
-                    onChange={() => setVisibility("private")}
-                  />
-                  Private
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="vis"
-                    checked={visibility === "unlisted"}
-                    onChange={() => setVisibility("unlisted")}
-                  />
-                  Unlisted
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="vis"
-                    checked={visibility === "schedule"}
-                    onChange={() => setVisibility("schedule")}
-                  />
-                  Schedule public release
-                </label>
-              </div>
-              {visibility === "schedule" ? (
-                <Input
-                  type="datetime-local"
-                  value={scheduleLocal}
-                  onChange={(e) => setScheduleLocal(e.target.value)}
-                  className="mt-2 max-w-xs"
-                />
-              ) : null}
-            </div>
             <label className="flex items-center gap-2 text-sm sm:col-span-2">
               <input
                 type="checkbox"
                 checked={madeForKids}
                 onChange={(e) => setMadeForKids(e.target.checked)}
               />
-              Made for kids (required; affects features and compliance)
+              Made for kids (all uploads in this batch)
             </label>
             <div className="space-y-2 sm:col-span-2">
               <label className="text-sm font-medium" htmlFor="bu-pl">
-                Add to playlist (optional)
+                Add each uploaded video to playlist (optional)
               </label>
               <select
                 id="bu-pl"
@@ -383,11 +395,22 @@ export function BulkUploadForm() {
             <div>
               <CardTitle>Queue</CardTitle>
               <CardDescription>
-                Files upload one after another (YouTube quota). Max 20 GB per
-                file in this build.
+                Choose a folder (sorted by path) or add individual files. Drag
+                the handle or use arrows to reorder. Max 20 GB per file.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
+              <input
+                ref={folderInputRef}
+                type="file"
+                multiple
+                {...({ webkitdirectory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
+                className="hidden"
+                onChange={(e) => {
+                  addFilesFromList(e.target.files, true)
+                  e.target.value = ""
+                }}
+              />
               <input
                 ref={fileInputRef}
                 type="file"
@@ -395,7 +418,7 @@ export function BulkUploadForm() {
                 accept="video/*"
                 className="hidden"
                 onChange={(e) => {
-                  addFiles(e.target.files)
+                  addFilesFromList(e.target.files, false)
                   e.target.value = ""
                 }}
               />
@@ -405,10 +428,21 @@ export function BulkUploadForm() {
                 size="sm"
                 className="gap-2"
                 disabled={!writesOk}
+                onClick={() => folderInputRef.current?.click()}
+              >
+                <FolderOpen className="size-4" />
+                Add folder
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={!writesOk}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <UploadCloud className="size-4" />
-                Add videos
+                Add files
               </Button>
               <Button
                 type="button"
@@ -435,34 +469,139 @@ export function BulkUploadForm() {
               >
                 Clear finished
               </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearQueue}
+                disabled={
+                  !queue.length || queue.some((r) => r.status === "uploading")
+                }
+              >
+                Clear queue
+              </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {queue.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No files yet. Use “Add videos” to build a batch.
+              No videos in the queue. Use “Add folder” or “Add files”.
             </p>
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-4">
               {queue.map((row) => (
                 <li
                   key={row.id}
+                  onDragOver={onDragOver}
+                  onDrop={(e) => onDrop(e, row.id)}
                   className="rounded-lg border border-border p-3 text-sm"
                 >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex gap-2">
+                    <div
+                      draggable={row.status !== "uploading"}
+                      onDragStart={(e) => onDragStart(e, row.id)}
+                      onDragEnd={() => setDragId(null)}
+                      className="flex shrink-0 flex-col items-center gap-1 pt-1 text-muted-foreground"
+                      title="Drag handle — reorder queue"
+                    >
+                      <GripVertical className="size-4 cursor-grab active:cursor-grabbing" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        aria-label="Move up"
+                        disabled={row.status === "uploading"}
+                        onClick={() => moveRow(row.id, -1)}
+                      >
+                        <ChevronUp className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        aria-label="Move down"
+                        disabled={row.status === "uploading"}
+                        onClick={() => moveRow(row.id, 1)}
+                      >
+                        <ChevronDown className="size-4" />
+                      </Button>
+                    </div>
                     <div className="min-w-0 flex-1 space-y-2">
                       <p className="truncate text-xs text-muted-foreground">
-                        {row.file.name} · {(row.file.size / (1024 * 1024)).toFixed(1)}{" "}
+                        {row.sortPath} · {(row.file.size / (1024 * 1024)).toFixed(1)}{" "}
                         MB
                       </p>
                       <Input
                         value={row.title}
-                        onChange={(e) => updateTitle(row.id, e.target.value)}
+                        onChange={(e) =>
+                          updateRow(row.id, {
+                            title: e.target.value.slice(0, 100),
+                          })
+                        }
                         maxLength={100}
                         disabled={row.status === "uploading"}
                         placeholder="Title"
                       />
+                      <div className="space-y-1">
+                        <label
+                          className="text-xs font-medium text-muted-foreground"
+                          htmlFor={`desc-${row.id}`}
+                        >
+                          Description
+                        </label>
+                        <textarea
+                          id={`desc-${row.id}`}
+                          value={row.description}
+                          onChange={(e) =>
+                            updateRow(row.id, {
+                              description: e.target.value.slice(0, 5000),
+                            })
+                          }
+                          rows={2}
+                          maxLength={5000}
+                          disabled={row.status === "uploading"}
+                          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                        <div className="space-y-1">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Visibility
+                          </span>
+                          <select
+                            value={row.visibility}
+                            onChange={(e) =>
+                              updateRow(row.id, {
+                                visibility: e.target
+                                  .value as VisibilityMode,
+                              })
+                            }
+                            disabled={row.status === "uploading"}
+                            className="h-9 w-full min-w-[10rem] rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
+                          >
+                            <option value="public">Public</option>
+                            <option value="private">Private</option>
+                            <option value="unlisted">Unlisted</option>
+                            <option value="schedule">Schedule public</option>
+                          </select>
+                        </div>
+                        {row.visibility === "schedule" ? (
+                          <Input
+                            type="datetime-local"
+                            value={row.scheduleLocal}
+                            onChange={(e) =>
+                              updateRow(row.id, {
+                                scheduleLocal: e.target.value,
+                              })
+                            }
+                            disabled={row.status === "uploading"}
+                            className="h-9 w-full max-w-[14rem] text-xs sm:w-auto"
+                          />
+                        ) : null}
+                      </div>
                       {row.status === "uploading" || row.progress > 0 ? (
                         <div className="h-2 overflow-hidden rounded-full bg-muted">
                           <div

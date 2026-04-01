@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import {
   BarChart3,
   Columns3,
+  FolderInput,
   LayoutDashboard,
   MessageSquare,
   Upload,
@@ -20,6 +21,7 @@ const ICONS: Record<(typeof DASHBOARD_NAV)[number]["icon"], LucideIcon> = {
   "layout-dashboard": LayoutDashboard,
   video: Video,
   upload: Upload,
+  "folder-input": FolderInput,
   "bar-chart-3": BarChart3,
   "message-square": MessageSquare,
   "columns-3": Columns3,

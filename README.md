@@ -74,14 +74,16 @@ On **Vercel/serverless**, OAuth **PKCE** and **`state`** cookies often do not ro
 
 - **Roles:** `VIEWER` (read pipeline/templates), `MEMBER` (edit), `ADMIN` (invites), `OWNER` (feature toggles). Team management lives under **`/dashboard/team`**.
 - **Invites:** Admins create an invite by email; the invitee must sign in with that Google account and open the copied **`/dashboard/join?token=…`** link.
-- **Feature flags (owner):** In **Settings**, owners can toggle **pipeline CSV export** and **YouTube write actions** (comments, playlist changes, video metadata updates, **bulk video upload** on **`/dashboard/upload`**). Deployment defaults: `FEATURE_EXPORTS_DEFAULT` and `FEATURE_YOUTUBE_WRITES_DEFAULT` (set to `false` to default new workspaces off until overridden in the DB).
+- **Feature flags (owner):** In **Settings**, owners can toggle **pipeline CSV export** and **YouTube write actions** (comments, playlist changes, video metadata updates, **video uploads** on **`/dashboard/upload`** and **`/dashboard/bulk-upload`**). Deployment defaults: `FEATURE_EXPORTS_DEFAULT` and `FEATURE_YOUTUBE_WRITES_DEFAULT` (set to `false` to default new workspaces off until overridden in the DB).
 
-### Bulk upload and scheduling
+### Upload and scheduling
 
-- **`/dashboard/upload`** queues multiple local video files and uploads them **sequentially** via the YouTube Data API (each upload uses quota — typically **~1,600 units** per video; check [Quota](https://developers.google.com/youtube/v3/getting-started#quota)).
-- **Scheduling:** Choose “Schedule public release” and a local date/time; videos are uploaded as **private** with a **`publishAt`** time (YouTube goes public automatically). Other options: public immediately, private, or unlisted.
-- **Re-consent:** If upload returns 403, sign out, remove the app at [Google permissions](https://myaccount.google.com/permissions), sign in again, and accept scopes (including **`youtube`** / **`youtube.upload`**).
-- **Limits:** This build caps each file at **20 GB** and sends **2 MiB chunks** through the app server (works on Vercel; very large batches may take a long time). For faster huge files, a desktop uploader can still be preferable.
+- **`/dashboard/upload`** — one video at a time (title, description, visibility, optional schedule, playlist).
+- **`/dashboard/bulk-upload`** — **Add folder** (all supported videos, sorted by path) or **Add files**; **reorder** with the drag handle or up/down arrows; **per row:** title, description, visibility, and optional **schedule public** time. **Shared** for the whole batch: tags, category, made-for-kids, optional playlist.
+- Uploads run **sequentially** via the YouTube Data API (each video uses quota — often **~1,600 units**; see [Quota](https://developers.google.com/youtube/v3/getting-started#quota)).
+- **Scheduling:** “Schedule public” uses **private** + **`publishAt`** (YouTube publishes at that time).
+- **Re-consent:** If upload returns 403, sign out, remove the app at [Google permissions](https://myaccount.google.com/permissions), sign in again, and accept scopes (**`youtube`** / **`youtube.upload`**).
+- **Limits:** **20 GB** max per file; **2 MiB chunks** through the app server (Vercel-friendly; huge batches can take a long time).
 
 ### Privacy and data handling
 

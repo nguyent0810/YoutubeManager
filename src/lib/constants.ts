@@ -4,6 +4,7 @@ export const DASHBOARD_NAV = [
   { href: "/dashboard", label: "Overview", icon: "layout-dashboard" as const },
   { href: "/dashboard/videos", label: "Videos", icon: "video" as const },
   { href: "/dashboard/upload", label: "Upload", icon: "upload" as const },
+  { href: "/dashboard/bulk-upload", label: "Bulk upload", icon: "folder-input" as const },
   { href: "/dashboard/analytics", label: "Analytics", icon: "bar-chart-3" as const },
   { href: "/dashboard/comments", label: "Comments", icon: "message-square" as const },
   { href: "/dashboard/pipeline", label: "Pipeline", icon: "columns-3" as const },
