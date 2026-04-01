@@ -12,4 +12,7 @@ export const queryKeys = {
     ["youtube", "analytics", "channel", from, to] as const,
   analyticsVideo: (id: string, from: string, to: string) =>
     ["youtube", "analytics", "video", id, from, to] as const,
+  savedReplies: ["saved-replies"] as const,
+  commentThreads: (videoId: string) =>
+    ["youtube", "commentThreads", videoId] as const,
 }

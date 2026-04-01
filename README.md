@@ -34,8 +34,17 @@ Open [http://localhost:3000](http://localhost:3000).
    | `NEXTAUTH_URL` | Optional duplicate of `AUTH_URL` for compatibility |
    | `GOOGLE_CLIENT_ID` | Web OAuth client |
    | `GOOGLE_CLIENT_SECRET` | Web OAuth client |
+   | `DATABASE_URL` | **Postgres** connection string — required for **saved replies** on `/dashboard/comments` (e.g. [Neon](https://neon.tech)). After setting it, run migrations (see below). |
 
    For **Analytics** (`/dashboard/analytics`), the same Google Cloud project should also have **YouTube Analytics API** enabled (Library → “YouTube Analytics API” → Enable), in addition to YouTube Data API v3.
+
+   **Database migrations (saved replies):** With `DATABASE_URL` in your environment, run:
+
+   ```bash
+   npx prisma migrate deploy
+   ```
+
+   (Locally or in CI; `postinstall` already runs `prisma generate`.) The initial migration creates the `SavedReply` table.
 
    If `AUTH_URL` / `NEXTAUTH_URL` are missing, `/api/auth/session` can return **500** and the dashboard shows “Could not load channel” because the session never establishes.
 

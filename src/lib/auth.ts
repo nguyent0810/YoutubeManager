@@ -100,6 +100,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token
     },
     async session({ session, token }) {
+      if (session.user) {
+        session.user.id =
+          (typeof token.sub === "string" && token.sub) ||
+          session.user.email ||
+          ""
+      }
       session.accessToken =
         typeof token.accessToken === "string" ? token.accessToken : undefined
       if (token.error === "RefreshAccessTokenError") {

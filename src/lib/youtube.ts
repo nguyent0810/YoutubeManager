@@ -319,3 +319,73 @@ export async function insertPlaylistItem(
   )
   await parseYouTubeResponse<unknown>(res)
 }
+
+/** Top-level comment in a thread (YouTube Data API shape, subset). */
+export interface YouTubeCommentSnippet {
+  authorDisplayName: string
+  textDisplay: string
+  publishedAt: string
+  updatedAt: string
+}
+
+export interface YouTubeCommentResource {
+  id: string
+  snippet: YouTubeCommentSnippet
+}
+
+export interface YouTubeCommentThreadItem {
+  id: string
+  snippet: {
+    topLevelComment: YouTubeCommentResource
+    totalReplyCount: number
+    canReply?: boolean
+  }
+  replies?: {
+    comments?: YouTubeCommentResource[]
+  }
+}
+
+export interface CommentThreadsListResult {
+  items?: YouTubeCommentThreadItem[]
+  nextPageToken?: string
+  pageInfo?: { totalResults: number }
+}
+
+export async function listCommentThreads(
+  videoId: string,
+  pageToken?: string
+): Promise<CommentThreadsListResult> {
+  const headers = await getAuthHeader()
+  const params = new URLSearchParams({
+    part: "snippet,replies",
+    videoId,
+    maxResults: "100",
+  })
+  if (pageToken) params.set("pageToken", pageToken)
+  const res = await fetch(
+    `${YOUTUBE_API_BASE}/commentThreads?${params}`,
+    { headers }
+  )
+  return parseYouTubeResponse<CommentThreadsListResult>(res)
+}
+
+export async function insertCommentReply(
+  parentId: string,
+  textOriginal: string
+): Promise<void> {
+  const headers = await getAuthHeader()
+  const res = await fetch(`${YOUTUBE_API_BASE}/comments?part=snippet`, {
+    method: "POST",
+    headers: {
+      ...headers,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      snippet: {
+        parentId,
+        textOriginal,
+      },
+    }),
+  })
+  await parseYouTubeResponse<unknown>(res)
+}

@@ -5,7 +5,7 @@ declare module "next-auth" {
     accessToken?: string
     /** Set when Google token refresh fails; client should prompt re-sign-in. */
     error?: "RefreshAccessTokenError"
-    user: DefaultSession["user"]
+    user: DefaultSession["user"] & { id: string }
   }
 }
 
