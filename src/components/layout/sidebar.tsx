@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  BarChart3,
   LayoutDashboard,
   Video,
   Settings,
@@ -14,6 +15,7 @@ import { DASHBOARD_NAV, APP_NAME } from "@/lib/constants"
 const ICONS: Record<(typeof DASHBOARD_NAV)[number]["icon"], LucideIcon> = {
   "layout-dashboard": LayoutDashboard,
   video: Video,
+  "bar-chart-3": BarChart3,
   settings: Settings,
 }
 
