@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ChevronDown,
   ChevronUp,
@@ -15,11 +15,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { toast } from "@/components/ui/toast"
-import { useOrgFeatures } from "@/hooks/use-org"
+import { ApiQuotaCard } from "@/components/help/api-quota-card"
+import { useAiStatus, useOrgFeatures } from "@/hooks/use-org"
 import { YOUTUBE_CATEGORY_OPTIONS } from "@/lib/youtube-categories"
+import { queryKeys } from "@/lib/query-keys"
+import { fileBasename, matchCsvToQueueRows, parseCsv } from "@/lib/csv-bulk"
+import { MAX_BULK_METADATA_ITEMS } from "@/lib/gemini"
 import {
   addVideoToPlaylist,
   fetchMyPlaylists,
+  formatUploadErrorMessage,
   uploadLocalFileToYoutube,
   type YoutubeUploadInitPayload,
 } from "@/lib/youtube-client"
@@ -140,11 +145,34 @@ function resolveRowPublish(
 
 export function BulkUploadForm() {
   const features = useOrgFeatures()
+  const aiStatus = useAiStatus()
   const writesOk = features.data?.youtube_writes ?? true
+  const qc = useQueryClient()
 
   const playlistsQ = useQuery({
     queryKey: ["youtube", "playlists", "mine"],
     queryFn: fetchMyPlaylists,
+  })
+
+  const templatesQ = useQuery({
+    queryKey: queryKeys.metadataTemplates,
+    queryFn: async () => {
+      const res = await fetch("/api/orgs/current/metadata-templates")
+      const data = (await res.json()) as {
+        error?: string
+        templates?: Array<{
+          id: string
+          name: string
+          title: string | null
+          description: string | null
+          tags: string | null
+          categoryId: string | null
+          visibility: string | null
+        }>
+      }
+      if (!res.ok) throw new Error(data.error ?? "Failed to load templates")
+      return data.templates ?? []
+    },
   })
 
   const [queue, setQueue] = React.useState<QueueRow[]>([])
@@ -159,8 +187,17 @@ export function BulkUploadForm() {
   const [seriesStep, setSeriesStep] = React.useState("1")
   const [seriesUnit, setSeriesUnit] = React.useState<SeriesStepUnit>("days")
 
+  const [templateName, setTemplateName] = React.useState("")
+  const [templateSelectId, setTemplateSelectId] = React.useState("")
+
+  const [aiContext, setAiContext] = React.useState("")
+  const [aiFillEmptyOnly, setAiFillEmptyOnly] = React.useState(true)
+  const [aiOverwriteTitles, setAiOverwriteTitles] = React.useState(false)
+  const [aiSuggestBusy, setAiSuggestBusy] = React.useState(false)
+
   const folderInputRef = React.useRef<HTMLInputElement>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const csvInputRef = React.useRef<HTMLInputElement>(null)
 
   const fileToRow = (file: File): QueueRow => ({
     id: randomId(),
@@ -195,6 +232,167 @@ export function BulkUploadForm() {
 
   const updateRow = (id: string, patch: Partial<QueueRow>) => {
     setQueue((q) => q.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  }
+
+  const applySelectedTemplate = () => {
+    const t = templatesQ.data?.find((x) => x.id === templateSelectId)
+    if (!t) {
+      toast.error("Pick a saved template.")
+      return
+    }
+    if (t.tags) setTagsRaw(t.tags)
+    if (t.categoryId) setCategoryId(t.categoryId)
+    toast.success(`Applied "${t.name}" to shared tags and category.`)
+  }
+
+  const saveTemplate = async () => {
+    const name = templateName.trim()
+    if (!name) {
+      toast.error("Enter a template name.")
+      return
+    }
+    try {
+      const res = await fetch("/api/orgs/current/metadata-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          tags: tagsRaw || null,
+          categoryId: categoryId || null,
+          title: null,
+          description: null,
+          visibility: null,
+        }),
+      })
+      const data: unknown = await res.json()
+      if (!res.ok) {
+        const msg =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : "Save failed"
+        throw new Error(msg)
+      }
+      setTemplateName("")
+      toast.success("Template saved.")
+      await qc.invalidateQueries({ queryKey: queryKeys.metadataTemplates })
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Save failed")
+    }
+  }
+
+  const onCsvPicked = async (list: FileList | null) => {
+    const f = list?.[0]
+    if (!f) return
+    try {
+      const text = await f.text()
+      const { headers, rows } = parseCsv(text)
+      if (!headers.length) {
+        toast.error("CSV is empty.")
+        return
+      }
+      const hasFileCol = ["filename", "file", "path"].some((k) =>
+        headers.includes(k)
+      )
+      if (!hasFileCol) {
+        toast.error(
+          "CSV needs a filename column (filename, file, or path) to match rows."
+        )
+        return
+      }
+      setQueue((q) => {
+        const next = matchCsvToQueueRows(q, rows)
+        const changed = next.filter((r, i) => r !== q[i]).length
+        if (!changed) {
+          queueMicrotask(() =>
+            toast.error("No queue rows matched CSV filenames.")
+          )
+          return q
+        }
+        queueMicrotask(() =>
+          toast.success(`Updated ${changed} row(s) from CSV.`)
+        )
+        return next
+      })
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Could not read CSV")
+    }
+    if (csvInputRef.current) csvInputRef.current.value = ""
+  }
+
+  const runAiMetadataSuggest = async () => {
+    const pending = queue.filter(
+      (r) => r.status === "queued" || r.status === "error"
+    )
+    const batch = pending.slice(0, MAX_BULK_METADATA_ITEMS)
+    if (!batch.length) {
+      toast.error("Add queued videos first (skip in-progress or finished rows).")
+      return
+    }
+    setAiSuggestBusy(true)
+    try {
+      const res = await fetch("/api/ai/bulk-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: aiContext.trim() || undefined,
+          items: batch.map((r) => ({
+            id: r.id,
+            basename: fileBasename(r.sortPath),
+            title: r.title.trim() || undefined,
+          })),
+        }),
+      })
+      const data = (await res.json()) as {
+        error?: string
+        suggestions?: Array<{
+          id: string
+          title: string
+          description: string
+          tags?: string
+        }>
+      }
+      if (!res.ok) {
+        throw new Error(data.error ?? "AI request failed")
+      }
+      const suggestions = data.suggestions ?? []
+      setQueue((q) =>
+        q.map((row) => {
+          const s = suggestions.find((x) => x.id === row.id)
+          if (!s) return row
+          const nextTitle =
+            aiOverwriteTitles || !row.title.trim()
+              ? s.title.slice(0, 100)
+              : row.title
+          const nextDesc =
+            aiFillEmptyOnly && row.description.trim()
+              ? row.description
+              : s.description.slice(0, 5000)
+          return { ...row, title: nextTitle, description: nextDesc }
+        })
+      )
+      setTagsRaw((prev) => {
+        if (prev.trim()) return prev
+        const allTags = new Set<string>()
+        for (const s of suggestions) {
+          for (const t of (s.tags ?? "").split(",")) {
+            const x = t.trim()
+            if (x) allTags.add(x)
+          }
+        }
+        if (!allTags.size) return prev
+        return [...allTags].slice(0, 30).join(", ")
+      })
+      toast.success(
+        `Applied AI drafts to ${suggestions.length} row(s). Review before uploading.`
+      )
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "AI request failed")
+    } finally {
+      setAiSuggestBusy(false)
+    }
   }
 
   const moveRow = (id: string, dir: -1 | 1) => {
@@ -375,7 +573,7 @@ export function BulkUploadForm() {
         )
         toast.success(`Uploaded: ${label}`)
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Upload failed"
+        const msg = formatUploadErrorMessage(e)
         setQueue((q) =>
           q.map((r) =>
             r.id === row.id
@@ -404,6 +602,8 @@ export function BulkUploadForm() {
           </CardHeader>
         </Card>
       ) : null}
+
+      {writesOk ? <ApiQuotaCard /> : null}
 
       <Card>
         <CardHeader>
@@ -473,6 +673,153 @@ export function BulkUploadForm() {
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Workspace templates &amp; CSV</CardTitle>
+          <CardDescription>
+            Save shared tags and category as a reusable preset, or import a CSV
+            to fill titles, descriptions, visibility, and schedule per file. Match
+            rows using a <span className="font-mono">filename</span>,{" "}
+            <span className="font-mono">file</span>, or{" "}
+            <span className="font-mono">path</span> column (basename match).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="bu-tpl-sel">
+                Saved template
+              </label>
+              <select
+                id="bu-tpl-sel"
+                value={templateSelectId}
+                onChange={(e) => setTemplateSelectId(e.target.value)}
+                disabled={templatesQ.isLoading || !writesOk}
+                className="h-10 w-full min-w-[12rem] rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">— Select —</option>
+                {(templatesQ.data ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!writesOk || !templateSelectId}
+              onClick={applySelectedTemplate}
+            >
+              Apply to shared fields
+            </Button>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+            <Input
+              placeholder="New template name"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+              disabled={!writesOk}
+              className="max-w-xs"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!writesOk}
+              onClick={() => void saveTemplate()}
+            >
+              Save current tags &amp; category
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => void onCsvPicked(e.target.files)}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!writesOk || !queue.length}
+              onClick={() => csvInputRef.current?.click()}
+            >
+              Import CSV into queue
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Optional columns: title, description, schedule, visibility.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {writesOk && aiStatus.data?.allowed ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>AI metadata suggestions (Gemini)</CardTitle>
+            <CardDescription>
+              Draft titles and descriptions for up to {MAX_BULK_METADATA_ITEMS}{" "}
+              queued rows at a time. Enable in Settings (workspace + your
+              opt-in). Always review before upload.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label
+                className="text-sm font-medium text-muted-foreground"
+                htmlFor="bu-ai-ctx"
+              >
+                Optional context (channel niche, series, tone)
+              </label>
+              <textarea
+                id="bu-ai-ctx"
+                value={aiContext}
+                onChange={(e) => setAiContext(e.target.value.slice(0, 2000))}
+                rows={3}
+                placeholder="e.g. Retro gaming reviews, casual tone, no spoilers in title…"
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={aiFillEmptyOnly}
+                  onChange={(e) => setAiFillEmptyOnly(e.target.checked)}
+                />
+                Only replace empty descriptions
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={aiOverwriteTitles}
+                  onChange={(e) => setAiOverwriteTitles(e.target.checked)}
+                />
+                Overwrite titles with AI
+              </label>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={aiSuggestBusy || running}
+              onClick={() => void runAiMetadataSuggest()}
+              className="gap-2"
+            >
+              {aiSuggestBusy ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                "Suggest for queued rows"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -771,7 +1118,25 @@ export function BulkUploadForm() {
                         </div>
                       ) : null}
                       {row.error ? (
-                        <p className="text-xs text-destructive">{row.error}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-xs text-destructive">{row.error}</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={running}
+                            onClick={() =>
+                              updateRow(row.id, {
+                                status: "queued",
+                                progress: 0,
+                                error: undefined,
+                              })
+                            }
+                          >
+                            Retry upload
+                          </Button>
+                        </div>
                       ) : null}
                       {row.videoId ? (
                         <a

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db"
 import { httpStatusFromError, jsonError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
 import { requireAuthedAdminOfOrg } from "@/lib/api-org-context"
+import { writeAuditLog } from "@/lib/audit-log"
 
 const postSchema = z.object({
   email: z.string().email(),
@@ -85,6 +86,18 @@ export async function POST(
         role: parsed.data.role as OrgRole,
         token,
         expiresAt,
+      },
+    })
+
+    await writeAuditLog({
+      organizationId: orgId,
+      userId: base.userId,
+      action: "invite_created",
+      entity: "OrganizationInvite",
+      metadata: {
+        inviteId: invite.id,
+        email: invite.email,
+        role: invite.role,
       },
     })
 

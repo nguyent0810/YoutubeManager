@@ -7,6 +7,7 @@ import {
   requireAuthedUser,
 } from "@/lib/api-org-context"
 import { ensurePersonalOrganization } from "@/lib/org"
+import { writeAuditLog } from "@/lib/audit-log"
 
 export async function GET() {
   try {
@@ -59,6 +60,14 @@ export async function POST(req: Request) {
         name: parsed.data.name.trim(),
         members: { create: { userId: u.userId, role: "OWNER" } },
       },
+    })
+
+    await writeAuditLog({
+      organizationId: org.id,
+      userId: u.userId,
+      action: "workspace_created",
+      entity: "Organization",
+      metadata: { name: org.name },
     })
 
     return Response.json({

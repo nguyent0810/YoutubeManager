@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { Download, Pencil, Plus, Trash2 } from "lucide-react"
+import { useQueries } from "@tanstack/react-query"
+import Link from "next/link"
+import { Download, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -20,6 +22,9 @@ import { PipelineItemDialog } from "@/components/pipeline/pipeline-item-dialog"
 import { toast } from "@/components/ui/toast"
 import { useOrgCurrent, useOrgFeatures } from "@/hooks/use-org"
 import { orgRoleAtLeast } from "@/lib/org-role"
+import { queryKeys } from "@/lib/query-keys"
+import { fetchVideoById } from "@/lib/youtube-client"
+import type { YouTubeVideo } from "@/types/youtube"
 
 function formatDue(iso: string | null) {
   if (!iso) return null
@@ -36,10 +41,16 @@ function PipelineCard({
   item,
   onEdit,
   canMutate,
+  video,
+  videoLoading,
+  videoError,
 }: {
   item: PipelineItemDto
   onEdit: () => void
   canMutate: boolean
+  video?: YouTubeVideo | null
+  videoLoading?: boolean
+  videoError?: boolean
 }) {
   const del = useDeletePipelineItem()
   const update = useUpdatePipelineItem()
@@ -52,6 +63,10 @@ function PipelineCard({
     )
   }
 
+  const thumb =
+    video?.snippet.thumbnails?.medium?.url ??
+    video?.snippet.thumbnails?.default?.url
+
   return (
     <div className="rounded-md border border-border bg-background p-3 shadow-sm">
       <p className="font-medium leading-snug">{item.title}</p>
@@ -60,12 +75,61 @@ function PipelineCard({
           {item.notes}
         </p>
       ) : null}
+      {item.youtubeVideoId ? (
+        <div className="mt-2 space-y-2">
+          {videoLoading ? (
+            <p className="text-[10px] text-muted-foreground">Loading video…</p>
+          ) : videoError ? (
+            <p className="text-[10px] text-destructive">
+              Could not load YouTube metadata for this id.
+            </p>
+          ) : video ? (
+            <div className="flex gap-2">
+              {thumb ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={thumb}
+                  alt=""
+                  className="h-14 w-24 shrink-0 rounded border border-border bg-muted object-cover"
+                />
+              ) : null}
+              <div className="min-w-0 flex-1 text-[10px] text-muted-foreground">
+                <p className="line-clamp-2 font-medium text-foreground">
+                  {video.snippet.title}
+                </p>
+                {video.statistics?.viewCount ? (
+                  <p>{Number(video.statistics.viewCount).toLocaleString()} views</p>
+                ) : null}
+                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                  <Link
+                    href={`https://www.youtube.com/watch?v=${item.youtubeVideoId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    Watch <ExternalLink className="size-3" />
+                  </Link>
+                  <Link
+                    href={`https://studio.youtube.com/video/${item.youtubeVideoId}/edit`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    Studio <ExternalLink className="size-3" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {item.youtubeVideoId}
+            </span>
+          )}
+        </div>
+      ) : null}
       <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
         {formatDue(item.dueDate) ? (
           <span>Due {formatDue(item.dueDate)}</span>
-        ) : null}
-        {item.youtubeVideoId ? (
-          <span className="font-mono">{item.youtubeVideoId}</span>
         ) : null}
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -171,6 +235,39 @@ export function PipelineBoard() {
     return m
   }, [query.data])
 
+  const videoIds = React.useMemo(() => {
+    const items = query.data ?? []
+    const s = new Set<string>()
+    for (const it of items) {
+      if (it.youtubeVideoId) s.add(it.youtubeVideoId)
+    }
+    return [...s]
+  }, [query.data])
+
+  const videoQueries = useQueries({
+    queries: videoIds.map((id) => ({
+      queryKey: queryKeys.video(id),
+      queryFn: () => fetchVideoById(id),
+      staleTime: 60_000,
+    })),
+  })
+
+  const videoMetaById = React.useMemo(() => {
+    const m = new Map<
+      string,
+      { data?: YouTubeVideo; isLoading: boolean; isError: boolean }
+    >()
+    videoIds.forEach((id, i) => {
+      const q = videoQueries[i]
+      m.set(id, {
+        data: q?.data,
+        isLoading: q?.isLoading ?? false,
+        isError: q?.isError ?? false,
+      })
+    })
+    return m
+  }, [videoIds, videoQueries])
+
   if (query.isError) {
     const msg =
       query.error instanceof Error ? query.error.message : "Failed to load"
@@ -249,17 +346,24 @@ export function PipelineBoard() {
                 </span>
               </h3>
               <div className="flex max-h-[min(70vh,560px)] flex-col gap-2 overflow-y-auto pr-1">
-                {(byStatus.get(col) ?? []).map((item) => (
-                  <PipelineCard
-                    key={item.id}
-                    item={item}
-                    canMutate={canMutate}
-                    onEdit={() => {
-                      setEditItem(item)
-                      setDialogOpen(true)
-                    }}
-                  />
-                ))}
+                {(byStatus.get(col) ?? []).map((item) => {
+                  const vid = item.youtubeVideoId
+                  const vm = vid ? videoMetaById.get(vid) : undefined
+                  return (
+                    <PipelineCard
+                      key={item.id}
+                      item={item}
+                      canMutate={canMutate}
+                      video={vm?.data ?? null}
+                      videoLoading={vid ? (vm?.isLoading ?? false) : false}
+                      videoError={vid ? (vm?.isError ?? false) : false}
+                      onEdit={() => {
+                        setEditItem(item)
+                        setDialogOpen(true)
+                      }}
+                    />
+                  )
+                })}
               </div>
             </div>
           ))}

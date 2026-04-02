@@ -18,4 +18,10 @@ export const queryKeys = {
   pipeline: ["pipeline"] as const,
   orgCurrent: ["orgs", "current"] as const,
   orgFeatures: ["orgs", "current", "features"] as const,
+  aiStatus: ["orgs", "current", "ai-status"] as const,
+  metadataTemplates: ["orgs", "current", "metadata-templates"] as const,
+  auditLogs: (limit: number) =>
+    ["orgs", "current", "audit-logs", limit] as const,
+  commentAssignments: (videoId: string) =>
+    ["orgs", "current", "comment-assignments", videoId] as const,
 }

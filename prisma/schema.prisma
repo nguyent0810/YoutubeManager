@@ -20,11 +20,14 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members       OrganizationMember[]
-  invites       OrganizationInvite[]
-  savedReplies  SavedReply[]
-  pipelineItems PipelineItem[]
-  featureFlags  OrgFeatureFlag[]
+  members             OrganizationMember[]
+  invites             OrganizationInvite[]
+  savedReplies        SavedReply[]
+  pipelineItems       PipelineItem[]
+  featureFlags        OrgFeatureFlag[]
+  metadataTemplates   MetadataTemplate[]
+  commentAssignments  CommentThreadAssignment[]
+  auditLogs           AuditLog[]
 }
 
 model OrganizationMember {
@@ -32,6 +35,8 @@ model OrganizationMember {
   organizationId String
   userId         String
   role           OrgRole      @default(VIEWER)
+  /** Per-user opt-in for AI-assisted features (bulk metadata, reply polish). */
+  aiOptIn        Boolean      @default(false)
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -60,6 +65,52 @@ model OrgFeatureFlag {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@id([organizationId, key])
+}
+
+/// Saved metadata presets for bulk/single upload (per workspace).
+model MetadataTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  title          String?      @db.Text
+  description    String?      @db.Text
+  tags           String?      @db.Text
+  categoryId     String?
+  visibility     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+/// Optional assignee for a comment thread (moderation).
+model CommentThreadAssignment {
+  id             String       @id @default(cuid())
+  organizationId String
+  videoId        String
+  threadId       String
+  assigneeUserId String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, threadId])
+  @@index([organizationId])
+  @@index([assigneeUserId])
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  action         String
+  entity         String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
 }
 
 /// Canned replies for the comments UI (scoped to organization).

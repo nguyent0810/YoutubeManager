@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { toast } from "@/components/ui/toast"
+import { ApiQuotaCard } from "@/components/help/api-quota-card"
 import { useOrgFeatures } from "@/hooks/use-org"
 import { YOUTUBE_CATEGORY_OPTIONS } from "@/lib/youtube-categories"
 import {
   addVideoToPlaylist,
   fetchMyPlaylists,
+  formatUploadErrorMessage,
   uploadLocalFileToYoutube,
   type YoutubeUploadInitPayload,
 } from "@/lib/youtube-client"
@@ -178,7 +180,7 @@ export function SingleUploadForm() {
       setProgress(0)
       if (fileRef.current) fileRef.current.value = ""
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Upload failed")
+      toast.error(formatUploadErrorMessage(e))
     } finally {
       setUploading(false)
     }
@@ -199,6 +201,8 @@ export function SingleUploadForm() {
           </CardHeader>
         </Card>
       ) : null}
+
+      {writesOk ? <ApiQuotaCard /> : null}
 
       <Card>
         <CardHeader>

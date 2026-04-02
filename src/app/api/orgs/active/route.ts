@@ -8,6 +8,7 @@ import {
   requireAuthedUser,
 } from "@/lib/api-org-context"
 import { ACTIVE_ORG_COOKIE } from "@/lib/org"
+import { writeAuditLog } from "@/lib/audit-log"
 
 const bodySchema = z.object({
   organizationId: z.string().min(1),
@@ -44,6 +45,14 @@ export async function POST(req: Request) {
     if (!m) {
       return jsonError("Not a member of this organization", 403)
     }
+
+    await writeAuditLog({
+      organizationId: parsed.data.organizationId,
+      userId: u.userId,
+      action: "workspace_switched",
+      entity: "Organization",
+      metadata: { organizationId: parsed.data.organizationId },
+    })
 
     const res = NextResponse.json({ ok: true })
     res.cookies.set(

@@ -5,6 +5,7 @@ import { useChannel } from "@/hooks/use-channel"
 import { useVideos } from "@/hooks/use-videos"
 import { CommentThreadsList } from "@/components/comments/comment-threads-list"
 import { SavedRepliesPanel } from "@/components/comments/saved-replies-panel"
+import { useOrgCurrent } from "@/hooks/use-org"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -12,6 +13,7 @@ import { toast } from "@/components/ui/toast"
 
 export default function CommentsPage() {
   const [videoId, setVideoId] = React.useState<string | null>(null)
+  const orgQ = useOrgCurrent()
 
   const channelQuery = useChannel()
   const channelId = channelQuery.data?.id
@@ -87,7 +89,10 @@ export default function CommentsPage() {
           <h2 className="text-sm font-medium text-muted-foreground">
             Comment threads
           </h2>
-          <CommentThreadsList videoId={videoId} />
+          <CommentThreadsList
+            videoId={videoId}
+            organizationId={orgQ.data?.activeOrganizationId ?? null}
+          />
         </div>
         <div className="min-w-0">
           <SavedRepliesPanel

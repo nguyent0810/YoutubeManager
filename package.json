@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.19.0",
     "@tanstack/react-query": "^5.95.2",
@@ -38,7 +41,9 @@
     "prisma": "^6.19.0",
     "tailwindcss": "^4",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.0.3",
+    "vitest": "^4.1.2"
   },
   "engines": {
     "node": ">=20.9.0"

@@ -10,7 +10,7 @@ import {
   useDeleteSavedReply,
   useSavedReplies,
 } from "@/hooks/use-saved-replies"
-import { useOrgCurrent } from "@/hooks/use-org"
+import { useAiStatus, useOrgCurrent } from "@/hooks/use-org"
 import { orgRoleAtLeast } from "@/lib/org-role"
 import { toast } from "@/components/ui/toast"
 
@@ -21,11 +21,39 @@ export function SavedRepliesPanel({
 }) {
   const query = useSavedReplies()
   const orgQ = useOrgCurrent()
+  const aiQ = useAiStatus()
   const create = useCreateSavedReply()
   const del = useDeleteSavedReply()
   const [title, setTitle] = React.useState("")
   const [body, setBody] = React.useState("")
+  const [polishBusy, setPolishBusy] = React.useState(false)
   const canMutate = orgRoleAtLeast(orgQ.data?.activeRole, "MEMBER")
+
+  const polishBody = async (mode: "shorten" | "expand" | "friendly" | "formal") => {
+    const text = body.trim()
+    if (!text) {
+      toast.error("Enter reply text to polish.")
+      return
+    }
+    setPolishBusy(true)
+    try {
+      const res = await fetch("/api/ai/reply-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, mode }),
+      })
+      const data = (await res.json()) as { error?: string; text?: string }
+      if (!res.ok) throw new Error(data.error ?? "AI polish failed")
+      if (typeof data.text === "string") {
+        setBody(data.text)
+        toast.success("Draft updated — review before saving.")
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "AI polish failed")
+    } finally {
+      setPolishBusy(false)
+    }
+  }
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -90,6 +118,33 @@ export function SavedRepliesPanel({
               rows={3}
               className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
+            {aiQ.data?.allowed && body.trim() ? (
+              <div className="flex flex-wrap gap-2">
+                <span className="w-full text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  AI polish (draft)
+                </span>
+                {(
+                  [
+                    ["shorten", "Shorter"],
+                    ["expand", "Expand"],
+                    ["friendly", "Friendly"],
+                    ["formal", "Formal"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <Button
+                    key={mode}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={polishBusy}
+                    onClick={() => void polishBody(mode)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
             <Button
               type="submit"
               size="sm"

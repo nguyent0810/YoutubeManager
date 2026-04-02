@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { signOut, useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,9 +10,10 @@ import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { Input } from "@/components/ui/input"
 import { LogOut } from "lucide-react"
 import { toast } from "@/components/ui/toast"
-import { useOrgCurrent, useOrgFeatures } from "@/hooks/use-org"
+import { useAiStatus, useOrgCurrent, useOrgFeatures } from "@/hooks/use-org"
 import { orgRoleAtLeast } from "@/lib/org-role"
 import { queryKeys } from "@/lib/query-keys"
+import { ApiQuotaCard } from "@/components/help/api-quota-card"
 
 export default function SettingsPage() {
   const { data: session, status } = useSession()
@@ -20,12 +21,34 @@ export default function SettingsPage() {
   const qc = useQueryClient()
   const orgQ = useOrgCurrent()
   const featQ = useOrgFeatures()
+  const aiQ = useAiStatus()
+  const auditQ = useQuery({
+    queryKey: queryKeys.auditLogs(50),
+    queryFn: async () => {
+      const res = await fetch("/api/orgs/current/audit-logs?limit=50")
+      const data = (await res.json()) as {
+        error?: string
+        logs?: Array<{
+          id: string
+          userId: string
+          action: string
+          entity: string | null
+          metadata: unknown
+          createdAt: string
+        }>
+      }
+      if (!res.ok) throw new Error(data.error ?? "Failed to load audit log")
+      return data.logs ?? []
+    },
+    enabled: orgRoleAtLeast(orgQ.data?.activeRole, "ADMIN"),
+  })
   const [newOrgName, setNewOrgName] = React.useState("")
   const [createBusy, setCreateBusy] = React.useState(false)
   const [switchBusy, setSwitchBusy] = React.useState(false)
   const [featBusy, setFeatBusy] = React.useState(false)
 
   const isOwner = orgRoleAtLeast(orgQ.data?.activeRole, "OWNER")
+  const isAdmin = orgRoleAtLeast(orgQ.data?.activeRole, "ADMIN")
 
   const switchOrg = async (organizationId: string, silent?: boolean) => {
     setSwitchBusy(true)
@@ -51,6 +74,7 @@ export default function SettingsPage() {
       await qc.invalidateQueries({ queryKey: queryKeys.orgFeatures })
       await qc.invalidateQueries({ queryKey: queryKeys.pipeline })
       await qc.invalidateQueries({ queryKey: queryKeys.savedReplies })
+      await qc.invalidateQueries({ queryKey: queryKeys.aiStatus })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Switch failed")
     } finally {
@@ -100,6 +124,7 @@ export default function SettingsPage() {
   const patchFeatures = async (patch: {
     exports?: boolean
     youtube_writes?: boolean
+    ai_features?: boolean
   }) => {
     setFeatBusy(true)
     try {
@@ -121,10 +146,40 @@ export default function SettingsPage() {
       }
       toast.success("Feature settings saved.")
       await qc.invalidateQueries({ queryKey: queryKeys.orgFeatures })
+      await qc.invalidateQueries({ queryKey: queryKeys.aiStatus })
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Update failed")
     } finally {
       setFeatBusy(false)
+    }
+  }
+
+  const [aiPrefBusy, setAiPrefBusy] = React.useState(false)
+  const patchAiPreference = async (optIn: boolean) => {
+    setAiPrefBusy(true)
+    try {
+      const res = await fetch("/api/orgs/current/ai-preference", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ optIn }),
+      })
+      const data: unknown = await res.json()
+      if (!res.ok) {
+        const msg =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : "Update failed"
+        throw new Error(msg)
+      }
+      toast.success(optIn ? "AI assistance enabled." : "AI assistance disabled.")
+      await qc.invalidateQueries({ queryKey: queryKeys.aiStatus })
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Update failed")
+    } finally {
+      setAiPrefBusy(false)
     }
   }
 
@@ -211,6 +266,8 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <ApiQuotaCard />
+
       {isOwner ? (
         <Card>
           <CardHeader>
@@ -222,6 +279,8 @@ export default function SettingsPage() {
               <code className="rounded bg-muted px-1">
                 FEATURE_YOUTUBE_WRITES_DEFAULT
               </code>
+              ,{" "}
+              <code className="rounded bg-muted px-1">FEATURE_AI_DEFAULT</code>
               ); set to <code className="rounded bg-muted px-1">false</code> to
               default off for new orgs without a DB row.
             </CardDescription>
@@ -273,8 +332,123 @@ export default function SettingsPage() {
                     </span>
                   </span>
                 </label>
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={featQ.data.ai_features ?? false}
+                    disabled={featBusy || !aiQ.data?.configured}
+                    onChange={(e) =>
+                      void patchFeatures({ ai_features: e.target.checked })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">AI-assisted drafting</span>
+                    <span className="mt-0.5 block text-muted-foreground">
+                      Optional Gemini-powered suggestions for bulk upload
+                      metadata and reply polish. Requires{" "}
+                      <code className="rounded bg-muted px-1">GEMINI_API_KEY</code>{" "}
+                      on the server. Each member must still opt in below.
+                    </span>
+                  </span>
+                </label>
               </>
             ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>AI-assisted features (Gemini)</CardTitle>
+          <CardDescription>
+            Suggestions are drafts only—always review before uploading or
+            posting. Nothing is sent to Google unless you opt in and use an AI
+            action.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          {aiQ.isLoading ? (
+            <p className="text-muted-foreground">Loading AI status…</p>
+          ) : aiQ.isError ? (
+            <p className="text-destructive">
+              {aiQ.error instanceof Error
+                ? aiQ.error.message
+                : "Could not load AI status"}
+            </p>
+          ) : aiQ.data && !aiQ.data.configured ? (
+            <p className="text-muted-foreground">
+              AI is not configured on this deployment. Set{" "}
+              <code className="rounded bg-muted px-1">GEMINI_API_KEY</code> in
+              the server environment to enable it.
+            </p>
+          ) : aiQ.data && !aiQ.data.orgEnabled ? (
+            <p className="text-muted-foreground">
+              The workspace owner has not enabled AI-assisted drafting for this
+              workspace yet.
+            </p>
+          ) : aiQ.data ? (
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={aiQ.data.userOptIn}
+                disabled={aiPrefBusy}
+                onChange={(e) => void patchAiPreference(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Use AI-assisted features</span>
+                <span className="mt-0.5 block text-muted-foreground">
+                  Enables bulk metadata suggestions and reply polish where
+                  shown in the app.
+                </span>
+              </span>
+            </label>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      {isAdmin ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Audit log</CardTitle>
+            <CardDescription>
+              Recent workspace actions (invites, feature flags, workspace
+              switches) visible to admins.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {auditQ.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : auditQ.isError ? (
+              <p className="text-sm text-destructive">
+                {auditQ.error instanceof Error
+                  ? auditQ.error.message
+                  : "Could not load audit log"}
+              </p>
+            ) : !auditQ.data?.length ? (
+              <p className="text-sm text-muted-foreground">No events yet.</p>
+            ) : (
+              <ul className="max-h-80 space-y-3 overflow-y-auto text-sm">
+                {auditQ.data.map((row) => (
+                  <li
+                    key={row.id}
+                    className="rounded-md border border-border bg-muted/30 px-3 py-2"
+                  >
+                    <p className="font-medium text-foreground">{row.action}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(row.createdAt).toLocaleString()} · user{" "}
+                      <span className="font-mono">{row.userId.slice(0, 12)}…</span>
+                    </p>
+                    {row.metadata != null ? (
+                      <pre className="mt-1 max-h-24 overflow-auto rounded bg-muted/50 p-2 text-[10px] text-muted-foreground">
+                        {JSON.stringify(row.metadata, null, 2)}
+                      </pre>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       ) : null}

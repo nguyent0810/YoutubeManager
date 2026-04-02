@@ -3,10 +3,12 @@ import { prisma } from "@/lib/db"
 /** Feature keys stored in OrgFeatureFlag and used by API / UI. */
 export const ORG_FEATURE_EXPORTS = "exports"
 export const ORG_FEATURE_YOUTUBE_WRITES = "youtube_writes"
+export const ORG_FEATURE_AI = "ai_features"
 
 export type OrgFeatureKey =
   | typeof ORG_FEATURE_EXPORTS
   | typeof ORG_FEATURE_YOUTUBE_WRITES
+  | typeof ORG_FEATURE_AI
 
 function envBool(name: string, defaultTrue: boolean): boolean {
   const v = process.env[name]
@@ -29,18 +31,27 @@ export async function isOrgFeatureEnabled(
   if (key === ORG_FEATURE_YOUTUBE_WRITES) {
     return envBool("FEATURE_YOUTUBE_WRITES_DEFAULT", true)
   }
+  if (key === ORG_FEATURE_AI) {
+    return envBool("FEATURE_AI_DEFAULT", false)
+  }
   return true
 }
 
 export async function getOrgFeatureSnapshot(organizationId: string): Promise<{
   exports: boolean
   youtube_writes: boolean
+  ai_features: boolean
 }> {
-  const [exportsEnabled, youtubeWrites] = await Promise.all([
+  const [exportsEnabled, youtubeWrites, aiFeatures] = await Promise.all([
     isOrgFeatureEnabled(organizationId, ORG_FEATURE_EXPORTS),
     isOrgFeatureEnabled(organizationId, ORG_FEATURE_YOUTUBE_WRITES),
+    isOrgFeatureEnabled(organizationId, ORG_FEATURE_AI),
   ])
-  return { exports: exportsEnabled, youtube_writes: youtubeWrites }
+  return {
+    exports: exportsEnabled,
+    youtube_writes: youtubeWrites,
+    ai_features: aiFeatures,
+  }
 }
 
 export async function upsertOrgFeature(

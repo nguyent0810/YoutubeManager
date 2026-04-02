@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db"
 import { httpStatusFromError, jsonError } from "@/lib/api-response"
 import { logApiError } from "@/lib/logger"
 import { requireAuthedAdminOfOrg } from "@/lib/api-org-context"
+import { writeAuditLog } from "@/lib/audit-log"
 
 export async function DELETE(
   _req: Request,
@@ -20,6 +21,14 @@ export async function DELETE(
       where: { id: inviteId, organizationId: orgId },
     })
     if (!invite) return jsonError("Invite not found", 404)
+
+    await writeAuditLog({
+      organizationId: orgId,
+      userId: base.userId,
+      action: "invite_revoked",
+      entity: "OrganizationInvite",
+      metadata: { inviteId, email: invite.email },
+    })
 
     await prisma.organizationInvite.delete({ where: { id: inviteId } })
     return Response.json({ ok: true })
