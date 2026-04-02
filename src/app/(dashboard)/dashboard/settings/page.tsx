@@ -155,6 +155,71 @@ export default function SettingsPage() {
   }
 
   const [aiPrefBusy, setAiPrefBusy] = React.useState(false)
+  const [geminiModalOpen, setGeminiModalOpen] = React.useState(false)
+  const [geminiKeyInput, setGeminiKeyInput] = React.useState("")
+  const [geminiKeyBusy, setGeminiKeyBusy] = React.useState(false)
+  const saveGeminiApiKey = async () => {
+    const k = geminiKeyInput.trim()
+    if (k.length < 20) {
+      toast.error("Paste a valid API key from Google AI Studio.")
+      return
+    }
+    setGeminiKeyBusy(true)
+    try {
+      const res = await fetch("/api/orgs/current/gemini-api-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: k }),
+      })
+      const data: unknown = await res.json()
+      if (!res.ok) {
+        const msg =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : "Could not save key"
+        throw new Error(msg)
+      }
+      setGeminiKeyInput("")
+      setGeminiModalOpen(false)
+      toast.success("Gemini API key saved for this workspace (encrypted).")
+      await qc.invalidateQueries({ queryKey: queryKeys.aiStatus })
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Save failed")
+    } finally {
+      setGeminiKeyBusy(false)
+    }
+  }
+
+  const removeGeminiApiKey = async () => {
+    if (!window.confirm("Remove your saved Gemini API key for this workspace?")) return
+    setGeminiKeyBusy(true)
+    try {
+      const res = await fetch("/api/orgs/current/gemini-api-key", {
+        method: "DELETE",
+      })
+      const data: unknown = await res.json()
+      if (!res.ok) {
+        const msg =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : "Could not remove key"
+        throw new Error(msg)
+      }
+      toast.success("Personal Gemini key removed.")
+      await qc.invalidateQueries({ queryKey: queryKeys.aiStatus })
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Remove failed")
+    } finally {
+      setGeminiKeyBusy(false)
+    }
+  }
+
   const patchAiPreference = async (optIn: boolean) => {
     setAiPrefBusy(true)
     try {
@@ -337,7 +402,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     className="mt-1"
                     checked={featQ.data.ai_features ?? false}
-                    disabled={featBusy || !aiQ.data?.configured}
+                    disabled={featBusy}
                     onChange={(e) =>
                       void patchFeatures({ ai_features: e.target.checked })
                     }
@@ -346,9 +411,10 @@ export default function SettingsPage() {
                     <span className="font-medium">AI-assisted drafting</span>
                     <span className="mt-0.5 block text-muted-foreground">
                       Optional Gemini-powered suggestions for bulk upload
-                      metadata and reply polish. Requires{" "}
-                      <code className="rounded bg-muted px-1">GEMINI_API_KEY</code>{" "}
-                      on the server. Each member must still opt in below.
+                      metadata and reply polish. Members can add their own API
+                      key in Settings, or the deployment can set{" "}
+                      <code className="rounded bg-muted px-1">GEMINI_API_KEY</code>
+                      . Each member must still opt in below.
                     </span>
                   </span>
                 </label>
@@ -376,37 +442,155 @@ export default function SettingsPage() {
                 ? aiQ.error.message
                 : "Could not load AI status"}
             </p>
-          ) : aiQ.data && !aiQ.data.configured ? (
-            <p className="text-muted-foreground">
-              AI is not configured on this deployment. Set{" "}
-              <code className="rounded bg-muted px-1">GEMINI_API_KEY</code> in
-              the server environment to enable it.
-            </p>
-          ) : aiQ.data && !aiQ.data.orgEnabled ? (
-            <p className="text-muted-foreground">
-              The workspace owner has not enabled AI-assisted drafting for this
-              workspace yet.
-            </p>
           ) : aiQ.data ? (
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={aiQ.data.userOptIn}
-                disabled={aiPrefBusy}
-                onChange={(e) => void patchAiPreference(e.target.checked)}
-              />
-              <span>
-                <span className="font-medium">Use AI-assisted features</span>
-                <span className="mt-0.5 block text-muted-foreground">
-                  Enables bulk metadata suggestions and reply polish where
-                  shown in the app.
-                </span>
-              </span>
-            </label>
+            <>
+              <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                <p className="font-medium text-foreground">Gemini API access</p>
+                <p className="text-xs text-muted-foreground">
+                  Your key is stored encrypted for this workspace only and is
+                  never shown back in the UI. You can use a{" "}
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    Google AI Studio key
+                  </a>{" "}
+                  instead of relying on the server{" "}
+                  <code className="rounded bg-muted px-1">GEMINI_API_KEY</code>.
+                  If you add your own key, it is used for your requests before
+                  any deployment key.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={geminiKeyBusy}
+                    onClick={() => setGeminiModalOpen(true)}
+                  >
+                    {aiQ.data.hasPersonalKey
+                      ? "Update personal API key"
+                      : "Add personal API key"}
+                  </Button>
+                  {aiQ.data.hasPersonalKey ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={geminiKeyBusy}
+                      onClick={() => void removeGeminiApiKey()}
+                    >
+                      Remove personal key
+                    </Button>
+                  ) : null}
+                </div>
+                {aiQ.data.hasPersonalKey ? (
+                  <p className="text-xs text-muted-foreground">
+                    Personal key on file for this workspace.
+                  </p>
+                ) : null}
+                {aiQ.data.hasEnvKey ? (
+                  <p className="text-xs text-muted-foreground">
+                    This deployment also provides a shared server key (fallback
+                    if you do not add your own).
+                  </p>
+                ) : null}
+                {!aiQ.data.configured ? (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Add a personal key above, or ask your host to set{" "}
+                    <code className="rounded bg-muted px-1">GEMINI_API_KEY</code>
+                    .
+                  </p>
+                ) : null}
+              </div>
+
+              {!aiQ.data.orgEnabled ? (
+                <p className="text-muted-foreground">
+                  The workspace owner has not enabled AI-assisted drafting for
+                  this workspace yet.
+                </p>
+              ) : (
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={aiQ.data.userOptIn}
+                    disabled={aiPrefBusy}
+                    onChange={(e) => void patchAiPreference(e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-medium">Use AI-assisted features</span>
+                    <span className="mt-0.5 block text-muted-foreground">
+                      Enables bulk metadata suggestions and reply polish where
+                      shown in the app.
+                    </span>
+                  </span>
+                </label>
+              )}
+            </>
           ) : null}
         </CardContent>
       </Card>
+
+      {geminiModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => !geminiKeyBusy && setGeminiModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg border border-border bg-card p-5 shadow-lg"
+            role="dialog"
+            aria-labelledby="gemini-key-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              id="gemini-key-title"
+              className="text-lg font-semibold tracking-tight"
+            >
+              Personal Gemini API key
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Paste your key once. It is encrypted with your app&apos;s{" "}
+              <code className="rounded bg-muted px-1">AUTH_SECRET</code> or{" "}
+              <code className="rounded bg-muted px-1">
+                GEMINI_KEY_ENCRYPTION_SECRET
+              </code>{" "}
+              before storage.
+            </p>
+            <Input
+              type="password"
+              autoComplete="off"
+              placeholder="AIza…"
+              value={geminiKeyInput}
+              onChange={(e) => setGeminiKeyInput(e.target.value)}
+              className="mt-4 font-mono text-sm"
+            />
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={geminiKeyBusy}
+                onClick={() => {
+                  setGeminiModalOpen(false)
+                  setGeminiKeyInput("")
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={geminiKeyBusy || geminiKeyInput.trim().length < 20}
+                onClick={() => void saveGeminiApiKey()}
+              >
+                {geminiKeyBusy ? "Saving…" : "Save key"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isAdmin ? (
         <Card>

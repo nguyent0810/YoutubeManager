@@ -20,13 +20,13 @@ const bodySchema = z.object({
   items: z.array(itemSchema).min(1).max(MAX_BULK_METADATA_ITEMS),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: Request): Promise<Response> {
   try {
     const ctx = await requireOrgWrite()
     if (ctx instanceof Response) return ctx
 
-    const blocked = await assertAiAllowed(ctx.organizationId, ctx.userId)
-    if (blocked) return blocked
+    const gate = await assertAiAllowed(ctx.organizationId, ctx.userId)
+    if (gate instanceof Response) return gate
 
     const json: unknown = await req.json()
     const parsed = bodySchema.safeParse(json)
@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     }
 
     const suggestions = await generateBulkMetadataSuggestions({
+      apiKey: gate.apiKey,
       items: parsed.data.items,
       context: parsed.data.context,
     })

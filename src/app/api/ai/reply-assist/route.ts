@@ -3,10 +3,7 @@ import { assertAiAllowed } from "@/lib/ai-guard"
 import { requireOrgRead } from "@/lib/api-org-context"
 import { httpStatusFromError, jsonError } from "@/lib/api-response"
 import { writeAuditLog } from "@/lib/audit-log"
-import {
-  generateReplyAssist,
-  type ReplyAssistMode,
-} from "@/lib/gemini"
+import { generateReplyAssist } from "@/lib/gemini"
 import { logApiError } from "@/lib/logger"
 
 const bodySchema = z.object({
@@ -14,13 +11,13 @@ const bodySchema = z.object({
   mode: z.enum(["shorten", "expand", "friendly", "formal"]),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: Request): Promise<Response> {
   try {
     const ctx = await requireOrgRead()
     if (ctx instanceof Response) return ctx
 
-    const blocked = await assertAiAllowed(ctx.organizationId, ctx.userId)
-    if (blocked) return blocked
+    const gate = await assertAiAllowed(ctx.organizationId, ctx.userId)
+    if (gate instanceof Response) return gate
 
     const json: unknown = await req.json()
     const parsed = bodySchema.safeParse(json)
@@ -29,6 +26,7 @@ export async function POST(req: Request) {
     }
 
     const text = await generateReplyAssist({
+      apiKey: gate.apiKey,
       text: parsed.data.text,
       mode: parsed.data.mode,
     })

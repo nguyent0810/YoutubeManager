@@ -69,6 +69,8 @@ export function useOrgFeatures() {
 
 export interface AiStatusResponse {
   configured: boolean
+  hasPersonalKey: boolean
+  hasEnvKey: boolean
   orgEnabled: boolean
   userOptIn: boolean
   allowed: boolean

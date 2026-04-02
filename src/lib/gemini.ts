@@ -66,11 +66,12 @@ function raceTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export async function generateBulkMetadataSuggestions(args: {
+  apiKey: string
   items: Array<{ id: string; basename: string; title?: string }>
   context?: string
 }): Promise<BulkMetadataSuggestion[]> {
-  const key = process.env.GEMINI_API_KEY?.trim()
-  if (!key) throw new Error("GEMINI_API_KEY is not set")
+  const key = args.apiKey.trim()
+  if (!key) throw new Error("Gemini API key is missing")
 
   const genAI = new GoogleGenerativeAI(key)
   const model = genAI.getGenerativeModel({ model: getModelName() })
@@ -106,11 +107,12 @@ Rules:
 export type ReplyAssistMode = "shorten" | "expand" | "friendly" | "formal"
 
 export async function generateReplyAssist(args: {
+  apiKey: string
   text: string
   mode: ReplyAssistMode
 }): Promise<string> {
-  const key = process.env.GEMINI_API_KEY?.trim()
-  if (!key) throw new Error("GEMINI_API_KEY is not set")
+  const key = args.apiKey.trim()
+  if (!key) throw new Error("Gemini API key is missing")
 
   const genAI = new GoogleGenerativeAI(key)
   const model = genAI.getGenerativeModel({ model: getModelName() })

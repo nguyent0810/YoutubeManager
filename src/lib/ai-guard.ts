@@ -2,12 +2,14 @@ import { jsonError } from "@/lib/api-response"
 import { isAiFullyEnabled } from "@/lib/ai-policy"
 import { prisma } from "@/lib/db"
 import { isOrgFeatureEnabled, ORG_FEATURE_AI } from "@/lib/features"
+import {
+  hasDeploymentGeminiKey,
+  resolveGeminiApiKeyForUser,
+} from "@/lib/resolve-gemini-key"
 
 export { isAiFullyEnabled } from "@/lib/ai-policy"
 
-export function isGeminiConfigured(): boolean {
-  return Boolean(process.env.GEMINI_API_KEY?.trim())
-}
+export type AiGateResult = Response | { apiKey: string }
 
 export async function getMemberAiOptIn(
   organizationId: string,
@@ -22,34 +24,54 @@ export async function getMemberAiOptIn(
   return m?.aiOptIn ?? false
 }
 
+export async function memberHasStoredGeminiKey(
+  organizationId: string,
+  userId: string
+): Promise<boolean> {
+  const m = await prisma.organizationMember.findUnique({
+    where: {
+      organizationId_userId: { organizationId, userId },
+    },
+    select: { geminiApiKeyEnc: true },
+  })
+  return Boolean(m?.geminiApiKeyEnc?.trim())
+}
+
 export async function getAiStatusForUser(
   organizationId: string,
   userId: string
 ): Promise<{
   configured: boolean
+  hasPersonalKey: boolean
+  hasEnvKey: boolean
   orgEnabled: boolean
   userOptIn: boolean
   allowed: boolean
 }> {
-  const configured = isGeminiConfigured()
+  const hasPersonalKey = await memberHasStoredGeminiKey(organizationId, userId)
+  const hasEnvKey = hasDeploymentGeminiKey()
+  const configured = hasPersonalKey || hasEnvKey
   const orgEnabled = await isOrgFeatureEnabled(organizationId, ORG_FEATURE_AI)
   const userOptIn = await getMemberAiOptIn(organizationId, userId)
   return {
     configured,
+    hasPersonalKey,
+    hasEnvKey,
     orgEnabled,
     userOptIn,
     allowed: isAiFullyEnabled({ configured, orgEnabled, userOptIn }),
   }
 }
 
-/** Returns a JSON Response when blocked, or `null` when the caller may invoke Gemini. */
+/** Returns a JSON Response when blocked, or the API key to use for Gemini. */
 export async function assertAiAllowed(
   organizationId: string,
   userId: string
-): Promise<Response | null> {
-  if (!isGeminiConfigured()) {
+): Promise<AiGateResult> {
+  const apiKey = await resolveGeminiApiKeyForUser(organizationId, userId)
+  if (!apiKey) {
     return jsonError(
-      "AI is not configured on this server (missing API key).",
+      "No Gemini API key available. Add your key in Settings → AI-assisted features, or set GEMINI_API_KEY on the server.",
       503,
       "ai_unconfigured"
     )
@@ -70,5 +92,5 @@ export async function assertAiAllowed(
       "ai_opt_in_required"
     )
   }
-  return null
+  return { apiKey }
 }

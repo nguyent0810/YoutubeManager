@@ -37,6 +37,8 @@ model OrganizationMember {
   role           OrgRole      @default(VIEWER)
   /** Per-user opt-in for AI-assisted features (bulk metadata, reply polish). */
   aiOptIn        Boolean      @default(false)
+  /** AES-GCM encrypted Google AI Studio key (per user + workspace). */
+  geminiApiKeyEnc String?     @db.Text
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 

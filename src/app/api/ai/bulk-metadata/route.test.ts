@@ -45,7 +45,7 @@ beforeEach(() => {
     userId: "user-1",
     organizationId: "org-1",
   })
-  hoisted.assertAiAllowed.mockResolvedValue(null)
+  hoisted.assertAiAllowed.mockResolvedValue({ apiKey: "test-api-key" })
   hoisted.generateBulk.mockResolvedValue([
     { id: "row-1", title: "AI title", description: "AI description" },
   ])
