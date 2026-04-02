@@ -75,6 +75,40 @@ function rowSortPath(file: File): string {
   return (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
 }
 
+type SeriesStepUnit = "minutes" | "hours" | "days" | "weeks"
+
+/** `datetime-local` string in the user's local timezone. */
+function formatDatetimeLocal(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** Nth slot: start + (index * stepValue) in the given unit. */
+function slotAfterStart(
+  start: Date,
+  index: number,
+  stepValue: number,
+  unit: SeriesStepUnit
+): Date {
+  const d = new Date(start.getTime())
+  const n = index * stepValue
+  switch (unit) {
+    case "minutes":
+      d.setMinutes(d.getMinutes() + n)
+      break
+    case "hours":
+      d.setHours(d.getHours() + n)
+      break
+    case "days":
+      d.setDate(d.getDate() + n)
+      break
+    case "weeks":
+      d.setDate(d.getDate() + n * 7)
+      break
+  }
+  return d
+}
+
 function resolveRowPublish(
   visibility: VisibilityMode,
   scheduleLocal: string,
@@ -120,6 +154,10 @@ export function BulkUploadForm() {
   const [playlistId, setPlaylistId] = React.useState("")
   const [running, setRunning] = React.useState(false)
   const [dragId, setDragId] = React.useState<string | null>(null)
+
+  const [seriesStart, setSeriesStart] = React.useState("")
+  const [seriesStep, setSeriesStep] = React.useState("1")
+  const [seriesUnit, setSeriesUnit] = React.useState<SeriesStepUnit>("days")
 
   const folderInputRef = React.useRef<HTMLInputElement>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -210,6 +248,53 @@ export function BulkUploadForm() {
       n.splice(to, 0, item!)
       return n
     })
+  }
+
+  const applyStaggeredSchedules = () => {
+    const eligible = queue.filter(
+      (r) => r.status !== "done" && r.status !== "uploading"
+    ).length
+    if (!eligible) {
+      toast.error(
+        "No rows to update (finished or in-progress uploads are skipped)."
+      )
+      return
+    }
+    if (!seriesStart.trim()) {
+      toast.error("Pick a start date and time for the first video in the queue.")
+      return
+    }
+    const start = new Date(seriesStart)
+    if (Number.isNaN(start.getTime())) {
+      toast.error("Invalid start date.")
+      return
+    }
+    if (start.getTime() < Date.now() + 60_000) {
+      toast.error("Start time must be at least one minute from now.")
+      return
+    }
+    const step = Math.floor(Number(seriesStep))
+    if (!Number.isFinite(step) || step < 1) {
+      toast.error("Step must be a whole number of 1 or more.")
+      return
+    }
+
+    setQueue((q) => {
+      let idx = 0
+      return q.map((row) => {
+        if (row.status === "done" || row.status === "uploading") return row
+        const slot = slotAfterStart(start, idx, step, seriesUnit)
+        idx++
+        return {
+          ...row,
+          visibility: "schedule",
+          scheduleLocal: formatDatetimeLocal(slot),
+        }
+      })
+    })
+    toast.success(
+      `Set "Schedule public" with staggered times for ${eligible} video(s) (queue order).`
+    )
   }
 
   const runQueue = async () => {
@@ -324,7 +409,7 @@ export function BulkUploadForm() {
         <CardHeader>
           <CardTitle>Shared for all videos in the queue</CardTitle>
           <CardDescription>
-            Tags, category, and “made for kids” apply to every row. Each row has
+            Tags, category, and made-for-kids apply to every row. Each row has
             its own title, description, visibility, and optional schedule.
           </CardDescription>
         </CardHeader>
@@ -386,6 +471,81 @@ export function BulkUploadForm() {
               </select>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Staggered public release</CardTitle>
+          <CardDescription>
+            Pick when the first video in the queue should go public, then a step
+            (every N minutes, hours, days, or weeks). Click apply to set{" "}
+            <strong>Schedule public</strong> times for each pending row in
+            current order. Reorder the queue first if needed. Finished or
+            in-progress uploads are skipped. You can still edit individual rows
+            afterward.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="bu-series-start">
+                First video goes public at
+              </label>
+              <Input
+                id="bu-series-start"
+                type="datetime-local"
+                value={seriesStart}
+                onChange={(e) => setSeriesStart(e.target.value)}
+                className="h-10 w-full max-w-[14rem]"
+              />
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="bu-series-step">
+                  Then every
+                </label>
+                <Input
+                  id="bu-series-step"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={seriesStep}
+                  onChange={(e) => setSeriesStep(e.target.value)}
+                  className="h-10 w-20"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="sr-only" htmlFor="bu-series-unit">
+                  Time unit
+                </label>
+                <select
+                  id="bu-series-unit"
+                  value={seriesUnit}
+                  onChange={(e) =>
+                    setSeriesUnit(e.target.value as SeriesStepUnit)
+                  }
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                  <option value="weeks">Weeks</option>
+                </select>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={applyStaggeredSchedules}
+            >
+              Apply to queue
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Example: start Monday 9:00, every 1 days → daily slots. Every 6
+            hours → four videos per day in order.
+          </p>
         </CardContent>
       </Card>
 

@@ -79,7 +79,7 @@ On **Vercel/serverless**, OAuth **PKCE** and **`state`** cookies often do not ro
 ### Upload and scheduling
 
 - **`/dashboard/upload`** — one video at a time (title, description, visibility, optional schedule, playlist).
-- **`/dashboard/bulk-upload`** — **Add folder** (all supported videos, sorted by path) or **Add files**; **reorder** with the drag handle or up/down arrows; **per row:** title, description, visibility, and optional **schedule public** time. **Shared** for the whole batch: tags, category, made-for-kids, optional playlist.
+- **`/dashboard/bulk-upload`** — **Add folder** (all supported videos, sorted by path) or **Add files**; **reorder** with the drag handle or up/down arrows; **per row:** title, description, visibility, and optional **schedule public** time. **Staggered schedule:** set a **first public time** and **step** (every N minutes / hours / days / weeks) to fill queue order automatically (reorder first). **Shared** for the whole batch: tags, category, made-for-kids, optional playlist.
 - Uploads run **sequentially** via the YouTube Data API (each video uses quota — often **~1,600 units**; see [Quota](https://developers.google.com/youtube/v3/getting-started#quota)).
 - **Scheduling:** “Schedule public” uses **private** + **`publishAt`** (YouTube publishes at that time).
 - **Re-consent:** If upload returns 403, sign out, remove the app at [Google permissions](https://myaccount.google.com/permissions), sign in again, and accept scopes (**`youtube`** / **`youtube.upload`**).
